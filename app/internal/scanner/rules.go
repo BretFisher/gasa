@@ -5,10 +5,6 @@ import (
 	"strings"
 )
 
-const (
-	ruleNameActionVersionPinning = "workflows/action-version-pinning"
-)
-
 type RuleInfo struct {
 	Name        string   `json:"name"`
 	Aliases     []string `json:"aliases,omitempty"`
@@ -38,7 +34,7 @@ func availableRules() []rule {
 		},
 		{
 			RuleInfo: RuleInfo{
-				Name:        ruleNameActionVersionPinning,
+				Name:        "workflows/action-version-pinning",
 				Aliases:     []string{"action-version-pinning", "action-pinning", "pinning"},
 				Title:       "Action Version Pinning",
 				Category:    "Workflows",
@@ -320,7 +316,7 @@ func buildRuleSuccessFinding(r rule, facts *ScanFacts, cfg *Config) *Finding {
 	switch r.Name {
 	case "workflows/pull-request-target":
 		return successFinding(r.Name, severity, "Workflow files", "SUCCESS pull_request_target event is not used", "No workflow uses `pull_request_target`, which avoids an event that should never be used in public repositories and is highly discouraged in private repositories.")
-	case ruleNameActionVersionPinning:
+	case "workflows/action-version-pinning":
 		return successFinding(r.Name, severity, "Workflow files", "SUCCESS Action versions are pinned safely", "All detected third-party actions are pinned to immutable commit SHAs instead of mutable tags or branches.")
 	case "workflows/workflow-permissions":
 		return successFinding(r.Name, severity, "Workflow files", "SUCCESS Workflow permissions are explicit", "All parsed workflows define explicit `permissions`, which avoids inheriting overly broad default token access.")
