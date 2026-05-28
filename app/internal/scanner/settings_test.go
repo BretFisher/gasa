@@ -107,6 +107,31 @@ func TestEvaluateDefaultWorkflowPermissions_WriteAndApprove(t *testing.T) {
 	}
 }
 
+func TestEvaluateDefaultWorkflowPermissions_RemediationWarning(t *testing.T) {
+	s, mux := newTestScanner(t, true)
+	handleJSON(mux, "/repos/owner/repo/actions/permissions", map[string]any{"enabled": true, "allowed_actions": "selected"})
+	handleJSON(mux, "/repos/owner/repo/actions/permissions/workflow", map[string]any{"default_workflow_permissions": "write", "can_approve_pull_request_reviews": false})
+	handleJSON(mux, "/repos/owner/repo/actions/permissions/fork-pr-contributor-approval", map[string]any{"approval_policy": "all_external_contributors"})
+	findings := collectAndEvaluateActionsSettings(t, s)
+	if len(findings) != 1 {
+		t.Fatalf("expected 1 finding, got %d: %+v", len(findings), findings)
+	}
+	finding := findings[0]
+	if finding.ID != "settings-default-permissions-write" {
+		t.Fatalf("expected finding ID 'settings-default-permissions-write', got %s", finding.ID)
+	}
+	// Verify the remediation includes the warning about breaking workflows
+	if !strings.Contains(finding.Remediation, "WARNING") {
+		t.Errorf("remediation missing WARNING: %s", finding.Remediation)
+	}
+	if !strings.Contains(finding.Remediation, "verify all workflows have explicit permissions blocks") {
+		t.Errorf("remediation missing warning about verifying workflows: %s", finding.Remediation)
+	}
+	if !strings.Contains(finding.Remediation, "workflow-permissions rule") {
+		t.Errorf("remediation missing reference to workflow-permissions rule: %s", finding.Remediation)
+	}
+}
+
 func TestEvaluateDefaultWorkflowPermissions_Read(t *testing.T) {
 	s, mux := newTestScanner(t, true)
 	handleJSON(mux, "/repos/owner/repo/actions/permissions", map[string]any{"enabled": true, "allowed_actions": "selected"})

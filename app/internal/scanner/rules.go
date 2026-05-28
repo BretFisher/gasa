@@ -657,7 +657,7 @@ func evaluateDefaultWorkflowPermissionsRule(facts *ScanFacts) []Finding {
 			Severity:    SeverityHigh,
 			Title:       "Default workflow permissions are read-write",
 			Description: "The default GITHUB_TOKEN permissions for this repository are set to read-write. This gives all workflows broad write access to the repository unless explicitly restricted per-workflow.",
-			Remediation: "Set default workflow permissions to 'Read repository contents and packages permissions' in Settings > Actions > General > Workflow permissions. Then explicitly grant write permissions only in workflows that need them.",
+			Remediation: "WARNING: Before changing this setting, verify all workflows have explicit permissions blocks (see workflow-permissions rule). Changing to read-only will break workflows that need write access but don't explicitly define permissions. Once workflows are updated, set default workflow permissions to 'Read repository contents and packages permissions' in Settings > Actions > General > Workflow permissions.",
 			DocURL:      "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository#setting-the-permissions-of-the-github_token-for-your-repository",
 		})
 	}
