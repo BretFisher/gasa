@@ -1,7 +1,7 @@
 # Default Workflow Permissions
 
-|              |      |
-| ------------ | ---- |
+| | |
+|---|---|
 | **Severity** | High |
 | **Check ID** | `actions_settings` |
 | **Auth required** | Yes |

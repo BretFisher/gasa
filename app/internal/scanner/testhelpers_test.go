@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -42,7 +43,9 @@ func newTestFactCollector(s *Scanner) *factCollector {
 
 func handleJSON(mux *http.ServeMux, path string, v any) {
 	mux.HandleFunc(path, func(w http.ResponseWriter, _ *http.Request) {
-		_ = json.NewEncoder(w).Encode(v)
+		if err := json.NewEncoder(w).Encode(v); err != nil {
+			panic(fmt.Sprintf("failed to encode test JSON: %v", err))
+		}
 	})
 }
 

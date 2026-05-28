@@ -48,7 +48,7 @@ func TestEvaluateActionsSettings_Disabled(t *testing.T) {
 
 func TestEvaluateActionsSettings_Unauthenticated(t *testing.T) {
 	s, mux := newTestScanner(t, false)
-	mux.HandleFunc("/repos/owner/repo/actions/permissions", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/repos/owner/repo/actions/permissions", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 		if _, err := w.Write([]byte(`{"message":"forbidden"}`)); err != nil {
 			t.Errorf("failed to write response: %v", err)
@@ -62,7 +62,7 @@ func TestEvaluateActionsSettings_Unauthenticated(t *testing.T) {
 
 func TestEvaluateActionsSettings_AuthFailed(t *testing.T) {
 	s, mux := newTestScanner(t, true)
-	mux.HandleFunc("/repos/owner/repo/actions/permissions", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/repos/owner/repo/actions/permissions", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 		if _, err := w.Write([]byte(`{"message":"forbidden"}`)); err != nil {
 			t.Errorf("failed to write response: %v", err)
@@ -173,9 +173,11 @@ func TestEvaluateForkPRApprovalPolicy_ForbiddenSkips(t *testing.T) {
 	s, mux := newTestScanner(t, true)
 	handleJSON(mux, "/repos/owner/repo/actions/permissions", map[string]any{"enabled": true, "allowed_actions": "selected"})
 	handleJSON(mux, "/repos/owner/repo/actions/permissions/workflow", map[string]any{"default_workflow_permissions": "read", "can_approve_pull_request_reviews": false})
-	mux.HandleFunc("/repos/owner/repo/actions/permissions/fork-pr-contributor-approval", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/repos/owner/repo/actions/permissions/fork-pr-contributor-approval", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte(`{"message":"forbidden"}`))
+		if _, err := w.Write([]byte(`{"message":"forbidden"}`)); err != nil {
+			t.Errorf("failed to write response: %v", err)
+		}
 	})
 	findings := collectAndEvaluateActionsSettings(t, s)
 	if len(findings) != 0 {
