@@ -5,6 +5,10 @@ import (
 	"strings"
 )
 
+const (
+	ruleNameActionVersionPinning = "workflows/action-version-pinning"
+)
+
 type RuleInfo struct {
 	Name        string   `json:"name"`
 	Aliases     []string `json:"aliases,omitempty"`
@@ -34,7 +38,7 @@ func availableRules() []rule {
 		},
 		{
 			RuleInfo: RuleInfo{
-				Name:        "workflows/action-version-pinning",
+				Name:        ruleNameActionVersionPinning,
 				Aliases:     []string{"action-version-pinning", "action-pinning", "pinning"},
 				Title:       "Action Version Pinning",
 				Category:    "Workflows",
@@ -179,44 +183,9 @@ func resolveRules(ruleNames, categories, severities []string, cfg *Config) ([]ru
 		return nil, err
 	}
 
-	selected := rules
-	if len(ruleNames) > 0 {
-		selected, err = resolveNamedRules(ruleNames, lookup)
-		if err != nil {
-			return nil, err
-		}
-	} else if len(categories) > 0 {
-		selected, err = filterByCategory(rules, categories)
-		if err != nil {
-			return nil, err
-		}
-	} else if cfg != nil {
-		if len(cfg.Rules.Include) > 0 {
-			selected, err = resolveNamedRules(cfg.Rules.Include, lookup)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		if len(cfg.Rules.Exclude) > 0 {
-			excluded, err := resolveNamedRules(cfg.Rules.Exclude, lookup)
-			if err != nil {
-				return nil, err
-			}
-			excludedSet := make(map[string]bool, len(excluded))
-			for _, r := range excluded {
-				excludedSet[r.Name] = true
-			}
-
-			filtered := make([]rule, 0, len(selected))
-			for _, r := range selected {
-				if excludedSet[r.Name] {
-					continue
-				}
-				filtered = append(filtered, r)
-			}
-			selected = filtered
-		}
+	selected, err := selectRules(ruleNames, categories, rules, lookup, cfg)
+	if err != nil {
+		return nil, err
 	}
 
 	if len(normalizedSeverities) == 0 {
@@ -226,7 +195,57 @@ func resolveRules(ruleNames, categories, severities []string, cfg *Config) ([]ru
 	return filterBySeverity(selected, normalizedSeverities, cfg)
 }
 
-func allRulesWithLookup(cfg *Config) ([]rule, map[string]rule, error) {
+func selectRules(ruleNames, categories []string, rules []rule, lookup map[string]rule, cfg *Config) ([]rule, error) {
+	if len(ruleNames) > 0 {
+		return resolveNamedRules(ruleNames, lookup)
+	}
+	if len(categories) > 0 {
+		return filterByCategory(rules, categories)
+	}
+	return applyConfigRules(rules, lookup, cfg)
+}
+
+func applyConfigRules(rules []rule, lookup map[string]rule, cfg *Config) ([]rule, error) {
+	if cfg == nil {
+		return rules, nil
+	}
+
+	selected := rules
+	if len(cfg.Rules.Include) > 0 {
+		var err error
+		selected, err = resolveNamedRules(cfg.Rules.Include, lookup)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if len(cfg.Rules.Exclude) > 0 {
+		return excludeRules(selected, lookup, cfg.Rules.Exclude)
+	}
+
+	return selected, nil
+}
+
+func excludeRules(selected []rule, lookup map[string]rule, exclude []string) ([]rule, error) {
+	excluded, err := resolveNamedRules(exclude, lookup)
+	if err != nil {
+		return nil, err
+	}
+	excludedSet := make(map[string]bool, len(excluded))
+	for _, r := range excluded {
+		excludedSet[r.Name] = true
+	}
+
+	filtered := make([]rule, 0, len(selected))
+	for _, r := range selected {
+		if !excludedSet[r.Name] {
+			filtered = append(filtered, r)
+		}
+	}
+	return filtered, nil
+}
+
+func allRulesWithLookup(_ *Config) ([]rule, map[string]rule, error) {
 	rules := availableRules()
 
 	lookup := make(map[string]rule, len(rules))
@@ -301,7 +320,7 @@ func buildRuleSuccessFinding(r rule, facts *ScanFacts, cfg *Config) *Finding {
 	switch r.Name {
 	case "workflows/pull-request-target":
 		return successFinding(r.Name, severity, "Workflow files", "SUCCESS pull_request_target event is not used", "No workflow uses `pull_request_target`, which avoids an event that should never be used in public repositories and is highly discouraged in private repositories.")
-	case "workflows/action-version-pinning":
+	case ruleNameActionVersionPinning:
 		return successFinding(r.Name, severity, "Workflow files", "SUCCESS Action versions are pinned safely", "All detected third-party actions are pinned to immutable commit SHAs instead of mutable tags or branches.")
 	case "workflows/workflow-permissions":
 		return successFinding(r.Name, severity, "Workflow files", "SUCCESS Workflow permissions are explicit", "All parsed workflows define explicit `permissions`, which avoids inheriting overly broad default token access.")
@@ -627,8 +646,7 @@ func evaluateAllowedActionsPolicyRule(facts *ScanFacts) []Finding {
 		return findings
 	}
 
-	switch *permissions.AllowedActions {
-	case "all":
+	if *permissions.AllowedActions == "all" {
 		findings = append(findings, Finding{
 			ID:          "settings-all-actions-allowed",
 			Severity:    SeverityMedium,

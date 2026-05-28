@@ -50,7 +50,9 @@ func TestEvaluateActionsSettings_Unauthenticated(t *testing.T) {
 	s, mux := newTestScanner(t, false)
 	mux.HandleFunc("/repos/owner/repo/actions/permissions", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte(`{"message":"forbidden"}`))
+		if _, err := w.Write([]byte(`{"message":"forbidden"}`)); err != nil {
+			t.Errorf("failed to write response: %v", err)
+		}
 	})
 	findings := collectAndEvaluateActionsSettings(t, s)
 	if len(findings) != 1 || findings[0].ID != "settings-check-unavailable" {
@@ -62,7 +64,9 @@ func TestEvaluateActionsSettings_AuthFailed(t *testing.T) {
 	s, mux := newTestScanner(t, true)
 	mux.HandleFunc("/repos/owner/repo/actions/permissions", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte(`{"message":"forbidden"}`))
+		if _, err := w.Write([]byte(`{"message":"forbidden"}`)); err != nil {
+			t.Errorf("failed to write response: %v", err)
+		}
 	})
 	findings := collectAndEvaluateActionsSettings(t, s)
 	if len(findings) != 1 || findings[0].ID != "settings-check-failed" {

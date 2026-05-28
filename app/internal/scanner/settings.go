@@ -83,10 +83,8 @@ func (c *factCollector) collectActionsSettingsFacts(ctx context.Context, owner, 
 				dbg(repoFull, fmt.Sprintf("fork-pr-approval fetch: status %d — skipped", resp.StatusCode))
 			}
 		}
-	} else {
-		if dbg != nil {
-			dbg(repoFull, "unauthenticated — skipping workflow permissions and fork-pr-approval checks")
-		}
+	} else if dbg != nil {
+		dbg(repoFull, "unauthenticated — skipping workflow permissions and fork-pr-approval checks")
 	}
 
 	return facts
