@@ -36,11 +36,12 @@ func repoAnchor(repoFull string) string {
 	return strings.ReplaceAll(repoFull, "/", "-")
 }
 
-// repoStateClass returns the 3-state CSS class for sidebar coloring.
+// repoStateClass returns the 4-state CSS class for sidebar coloring.
 //
-//	"error"    — scan failed entirely or returned a result-level error
-//	"findings" — scan succeeded but has one or more non-success findings
-//	"clean"    — scan succeeded with zero findings
+//	"error"         — scan failed entirely or returned a result-level error
+//	"high-findings" — scan succeeded and has one or more HIGH or CRITICAL severity findings
+//	"findings"      — scan succeeded but has one or more non-success findings (medium/low/info)
+//	"clean"         — scan succeeded with zero findings
 func repoStateClass(r batchRepoResult) string {
 	if r.Err != nil {
 		return "error"
@@ -49,10 +50,22 @@ func repoStateClass(r batchRepoResult) string {
 		return "error"
 	}
 	if r.Result != nil {
+		hasHighOrCritical := false
+		hasFindings := false
 		for _, f := range r.Result.Findings {
 			if !f.Success {
-				return "findings"
+				hasFindings = true
+				if f.Severity == scanner.SeverityHigh || f.Severity == scanner.SeverityCritical {
+					hasHighOrCritical = true
+					break // Found high/critical, no need to continue
+				}
 			}
+		}
+		if hasHighOrCritical {
+			return "high-findings"
+		}
+		if hasFindings {
+			return "findings"
 		}
 	}
 	return "clean"
@@ -209,12 +222,16 @@ const htmlBatchCSS = `
   box-sizing: border-box;
 }
 .sidebar-header { padding: 0 1rem 0.75rem; font-weight: 700; font-size: 0.9rem; color: var(--th-fg); border-bottom: 1px solid var(--row-border); margin-bottom: 0.5rem; }
+.sidebar-legend { padding: 0 1rem 0.75rem; font-size: 0.75rem; color: var(--muted); border-bottom: 1px solid var(--row-border); margin-bottom: 0.5rem; }
+.legend-item { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.3rem; line-height: 1.2; }
+.legend-item:last-child { margin-bottom: 0; }
 .sidebar a { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 1rem; font-size: 0.82rem; color: var(--th-fg); text-decoration: none; line-height: 1.3; word-break: break-all; }
 .sidebar a:hover { background: var(--badge-bg); text-decoration: none; }
 .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-.dot-clean    { background: #16a34a; }
-.dot-findings { background: #d97706; }
-.dot-error    { background: #9ca3af; }
+.dot-clean         { background: #16a34a; }
+.dot-high-findings { background: #dc2626; }
+.dot-findings      { background: #d97706; }
+.dot-error         { background: #ec4899; }
 .main { flex: 1; padding: 2rem; min-width: 0; }
 /* summary section */
 .summary-section { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1.75rem; }
@@ -256,6 +273,12 @@ const htmlBatchTemplate = `<!doctype html>
     <!-- Sidebar nav -->
     <nav class="sidebar" aria-label="Repository navigation">
       <div class="sidebar-header">{{ .TotalRepos }} repositories</div>
+      <div class="sidebar-legend">
+        <div class="legend-item"><span class="dot dot-clean"></span><span>Clean (no findings)</span></div>
+        <div class="legend-item"><span class="dot dot-findings"></span><span>Medium/low findings</span></div>
+        <div class="legend-item"><span class="dot dot-high-findings"></span><span>High/critical findings</span></div>
+        <div class="legend-item"><span class="dot dot-error"></span><span>Scan error</span></div>
+      </div>
       {{ range .Repos }}
       <a href="#{{ .Anchor }}">
         <span class="dot dot-{{ .StateClass }}"></span>{{ .RepoFullName }}
