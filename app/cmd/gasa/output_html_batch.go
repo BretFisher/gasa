@@ -228,7 +228,7 @@ const htmlBatchCSS = `
 .dot-clean         { background: #16a34a; }
 .dot-high-findings { background: #dc2626; }
 .dot-findings      { background: #d97706; }
-.dot-error         { background: #9ca3af; }
+.dot-error         { background: #ec4899; }
 .main { flex: 1; padding: 2rem; min-width: 0; }
 /* summary section */
 .summary-section { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1.75rem; }
