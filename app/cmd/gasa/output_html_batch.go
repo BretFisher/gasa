@@ -222,6 +222,9 @@ const htmlBatchCSS = `
   box-sizing: border-box;
 }
 .sidebar-header { padding: 0 1rem 0.75rem; font-weight: 700; font-size: 0.9rem; color: var(--th-fg); border-bottom: 1px solid var(--row-border); margin-bottom: 0.5rem; }
+.sidebar-legend { padding: 0 1rem 0.75rem; font-size: 0.75rem; color: var(--muted); border-bottom: 1px solid var(--row-border); margin-bottom: 0.5rem; }
+.legend-item { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.3rem; line-height: 1.2; }
+.legend-item:last-child { margin-bottom: 0; }
 .sidebar a { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 1rem; font-size: 0.82rem; color: var(--th-fg); text-decoration: none; line-height: 1.3; word-break: break-all; }
 .sidebar a:hover { background: var(--badge-bg); text-decoration: none; }
 .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
@@ -270,6 +273,12 @@ const htmlBatchTemplate = `<!doctype html>
     <!-- Sidebar nav -->
     <nav class="sidebar" aria-label="Repository navigation">
       <div class="sidebar-header">{{ .TotalRepos }} repositories</div>
+      <div class="sidebar-legend">
+        <div class="legend-item"><span class="dot dot-clean"></span><span>Clean (no findings)</span></div>
+        <div class="legend-item"><span class="dot dot-findings"></span><span>Medium/low findings</span></div>
+        <div class="legend-item"><span class="dot dot-high-findings"></span><span>High/critical findings</span></div>
+        <div class="legend-item"><span class="dot dot-error"></span><span>Scan error</span></div>
+      </div>
       {{ range .Repos }}
       <a href="#{{ .Anchor }}">
         <span class="dot dot-{{ .StateClass }}"></span>{{ .RepoFullName }}
