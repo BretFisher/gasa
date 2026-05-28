@@ -1,0 +1,111 @@
+name: release
+
+on:
+  workflow_dispatch:
+    # checkov:skip=CKV_GHA_7: manual releases require an explicit version input, validated later in this workflow
+    inputs:
+      version:
+        description: Version to release in semver format, for example v0.1.0
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Ensure workflow runs from main
+        run: |
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "Release workflow must run from main"
+            exit 1
+          fi
+
+      - name: Validate version input
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if ! [[ "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Version must look like v0.1.0"
+            exit 1
+          fi
+
+      - name: Ensure tag does not already exist
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if git rev-parse "${VERSION}" >/dev/null 2>&1; then
+            echo "Tag ${VERSION} already exists locally"
+            exit 1
+          fi
+
+          if git ls-remote --exit-code --tags origin "refs/tags/${VERSION}" >/dev/null 2>&1; then
+            echo "Tag ${VERSION} already exists on origin"
+            exit 1
+          fi
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c #v6.4.0
+        with:
+          go-version-file: app/go.mod
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd #v4.0.0
+
+      - name: Ensure DHI credentials are configured
+        env:
+          DHI_USERNAME: ${{ secrets.DHI_USERNAME }}
+          DHI_PASSWORD: ${{ secrets.DHI_PASSWORD }}
+        run: |
+          if [ -z "${DHI_USERNAME}" ] || [ -z "${DHI_PASSWORD}" ]; then
+            echo "Set DHI_USERNAME and DHI_PASSWORD repository secrets before cutting a release"
+            exit 1
+          fi
+
+      - name: Log in to DHI
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 #v4.1.0
+        with:
+          registry: dhi.io
+          username: ${{ secrets.DHI_USERNAME }}
+          password: ${{ secrets.DHI_PASSWORD }}
+
+      - name: Log in to GHCR
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 #v4.1.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git identity for release tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Create and push release tag
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          git tag -a "${VERSION}" -m "Release ${VERSION}"
+          git push origin "${VERSION}"
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89 #v7.2.2
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

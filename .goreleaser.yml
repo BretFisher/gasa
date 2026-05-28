@@ -1,0 +1,74 @@
+version: 2
+
+project_name: gasa
+
+dist: dist
+
+builds:
+  - id: gasa
+    binary: gasa
+    dir: app
+    main: ./cmd/gasa
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.Version={{ .Version }}
+
+archives:
+  - id: gasa
+    ids:
+      - gasa
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+
+dockers_v2:
+  - id: gasa
+    ids:
+      - gasa
+    dockerfile: Dockerfile.goreleaser
+    images:
+      - ghcr.io/bretfisher/gasa
+    tags:
+      - "{{ .Version }}"
+      - "v{{ .Major }}"
+      - latest
+    labels:
+      org.opencontainers.image.title: "{{ .ProjectName }}"
+      org.opencontainers.image.description: "GitHub Actions Security Assessment"
+      org.opencontainers.image.source: "{{ .GitURL }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.version: "{{ .Version }}"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+
+release:
+  github:
+    owner: bretfisher
+    name: github-security-assessment
+  draft: false
+  prerelease: auto

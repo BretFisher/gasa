@@ -1,0 +1,511 @@
+package main
+
+import (
+	"bufio"
+	"context"
+	"fmt"
+	"os"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/bretfisher/github-security-assessment/app/internal/scanner"
+	"github.com/google/go-github/v84/github"
+	"github.com/spf13/cobra"
+	"golang.org/x/sync/errgroup"
+)
+
+var (
+	flagBatchOutput          string
+	flagBatchConcurrency     int
+	flagBatchIncludeArchived bool
+	flagBatchInput           string
+	// batch also gets its own copies of the run-level filters
+	flagBatchRules      []string
+	flagBatchCategories []string
+	flagBatchSeverities []string
+	flagBatchSuccess    bool
+)
+
+// batchRepoResult holds the outcome of scanning a single repo in a batch run.
+type batchRepoResult struct {
+	RepoFullName string
+	Result       *scanner.ScanResult // nil when Err is set
+	Err          error               // non-nil means the scan failed entirely
+	Index        int                 // preserves input ordering
+}
+
+type batchScanOptions struct {
+	Rules          []string
+	Categories     []string
+	Severities     []string
+	IncludeSuccess bool
+	OutputFormat   string
+	Debug          bool
+	Timeout        time.Duration
+}
+
+type batchCommandOptions struct {
+	Format          string
+	OutputPath      string
+	Concurrency     int
+	IncludeArchived bool
+	InputPath       string
+	Rules           []string
+	Categories      []string
+	Severities      []string
+	IncludeSuccess  bool
+	Debug           bool
+	Timeout         time.Duration
+	TokenStdin      bool
+	ConfigPath      string
+}
+
+type batchRequest struct {
+	Target          string
+	Format          string
+	OutputPath      string
+	Concurrency     int
+	IncludeArchived bool
+	InputPath       string
+	Rules           []string
+	Categories      []string
+	Severities      []string
+	IncludeSuccess  bool
+	Debug           bool
+	Timeout         time.Duration
+	TokenStdin      bool
+	ConfigPath      string
+}
+
+var batchCmd = &cobra.Command{
+	Use:   "batch [owner-or-user | owner/repo,owner/repo,...]",
+	Short: "Scan multiple repositories and produce a combined report",
+	Long: `Scan multiple repositories and produce a combined report.
+
+Input modes (exactly one required):
+  owner-or-user         A single GitHub username or org name — fetches all repos
+  owner/repo,...        One or more explicit owner/repo pairs (comma-separated)
+  --input <file>        A file with one owner/repo per line (#-comments and blank lines ignored)
+
+Output behavior:
+  --format table        Streams each repo result to stdout as it completes
+  --format json         Writes a JSON array of all results to --output (required)
+  --format html         Writes a combined HTML report to --output (required)
+
+Status and progress lines always go to stderr.`,
+	Example: `  gasa batch owner --format html --output owner-security-report.html
+  gasa batch owner --config .gasa.yaml --concurrency 5 --format html --output report.html
+  gasa batch owner/repo1,owner/repo2 --format html --output report.html
+  gasa batch --input repos.txt --format html --output report.html
+  gasa batch owner --format table
+  gasa batch owner --rule action-pinning --severity high,critical --format html --output report.html
+  gasa batch owner --include-archived --format html --output report.html`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: runBatch,
+}
+
+func init() {
+	batchCmd.Flags().StringVar(&flagBatchOutput, "output", "", "write report to this file path (required for --format html and --format json)")
+	batchCmd.Flags().IntVar(&flagBatchConcurrency, "concurrency", 5, "number of repos to scan in parallel")
+	batchCmd.Flags().BoolVar(&flagBatchIncludeArchived, "include-archived", false, "include archived repos when scanning by owner/user")
+	batchCmd.Flags().StringVar(&flagBatchInput, "input", "", "path to a file with one owner/repo per line")
+	batchCmd.Flags().StringSliceVarP(&flagBatchRules, "rule", "r", nil, "run only the specified rule (repeat or comma-separate)")
+	batchCmd.Flags().StringSliceVar(&flagBatchCategories, "category", nil, "run only rules in the specified category (workflows,settings,updates)")
+	batchCmd.Flags().StringSliceVar(&flagBatchSeverities, "severity", nil, "run only rules with the specified severity (critical,high,medium,low,info)")
+	batchCmd.Flags().BoolVar(&flagBatchSuccess, "success", false, "include successful rule results in the output")
+	batchCmd.MarkFlagsMutuallyExclusive("rule", "category")
+	batchCmd.MarkFlagsMutuallyExclusive("rule", "severity")
+}
+
+func runBatch(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+
+	req, err := buildBatchRequest(args, batchCommandOptions{
+		Format:          flagFormat,
+		OutputPath:      flagBatchOutput,
+		Concurrency:     flagBatchConcurrency,
+		IncludeArchived: flagBatchIncludeArchived,
+		InputPath:       flagBatchInput,
+		Rules:           flagBatchRules,
+		Categories:      flagBatchCategories,
+		Severities:      flagBatchSeverities,
+		IncludeSuccess:  flagBatchSuccess,
+		Debug:           flagDebug,
+		Timeout:         flagTimeout,
+		TokenStdin:      flagTokenStdin,
+		ConfigPath:      flagConfig,
+	})
+	if err != nil {
+		return err
+	}
+
+	// Resolve token and build scanner
+	resolvedToken, authSource, err := resolveToken(ctx, req.TokenStdin, os.Stdin)
+	if err != nil {
+		return err
+	}
+	var s *scanner.Scanner
+	if resolvedToken != "" {
+		s = scanner.NewWithToken(resolvedToken)
+	} else {
+		s = scanner.New()
+	}
+
+	// Load config
+	var cfg *scanner.Config
+	var loadedConfigPath string
+	if req.ConfigPath != "" {
+		cfg, err = scanner.LoadConfig(req.ConfigPath)
+		loadedConfigPath = req.ConfigPath
+	} else {
+		cfg, loadedConfigPath, err = scanner.LoadConfigFromDir(".")
+	}
+	if err != nil {
+		return err
+	}
+
+	// Build repo list
+	var repos []string
+	if req.InputPath != "" {
+		repos, err = repoListFromFile(req.InputPath)
+		if err != nil {
+			return fmt.Errorf("reading --input file: %w", err)
+		}
+	} else {
+		arg := req.Target
+		if strings.Contains(arg, "/") {
+			// Explicit owner/repo list (comma-separated)
+			repos, err = parseRepoList(arg)
+			if err != nil {
+				return err
+			}
+		} else {
+			// Owner/user name — fetch all repos via API
+			if resolvedToken == "" {
+				fmt.Fprintln(os.Stderr, "Warning: unauthenticated — repo listing is limited to 60 req/hr and may be incomplete")
+			}
+			listCtx, cancel := context.WithTimeout(ctx, req.Timeout)
+			repos, err = fetchRepoList(listCtx, s.GitHubClient(), arg, req.IncludeArchived)
+			cancel()
+			if err != nil {
+				return fmt.Errorf("fetching repo list for %q: %w", arg, err)
+			}
+		}
+	}
+
+	if len(repos) == 0 {
+		return fmt.Errorf("no repositories found to scan")
+	}
+
+	// Print batch header to stderr
+	fmt.Fprintf(os.Stderr, "Batch scan: %d repositories, concurrency %d\n", len(repos), req.Concurrency)
+	if len(req.Rules) > 0 {
+		fmt.Fprintf(os.Stderr, "Rules: %s\n", strings.Join(req.Rules, ", "))
+	}
+	if len(req.Categories) > 0 {
+		fmt.Fprintf(os.Stderr, "Categories: %s\n", strings.Join(req.Categories, ", "))
+	}
+	if len(req.Severities) > 0 {
+		fmt.Fprintf(os.Stderr, "Severities: %s\n", strings.Join(req.Severities, ", "))
+	}
+	if loadedConfigPath != "" {
+		fmt.Fprintf(os.Stderr, "Config: %s\n", loadedConfigPath)
+	}
+	if resolvedToken != "" {
+		fmt.Fprintf(os.Stderr, "Auth: %s\n", authSource)
+	} else {
+		fmt.Fprintf(os.Stderr, "Auth: unauthenticated (60 req/hr limit, some checks unavailable)\n")
+	}
+	fmt.Fprintln(os.Stderr)
+
+	// Run scans with worker pool
+	results := runBatchScans(ctx, repos, s, cfg, req.Concurrency, batchScanOptions{
+		Rules:          req.Rules,
+		Categories:     req.Categories,
+		Severities:     req.Severities,
+		IncludeSuccess: req.IncludeSuccess,
+		OutputFormat:   req.Format,
+		Debug:          req.Debug,
+		Timeout:        req.Timeout,
+	})
+
+	// Dispatch output
+	switch req.Format {
+	case outputFormatHTML:
+		return printBatchHTML(results, req.OutputPath)
+	case outputFormatJSON:
+		return printBatchJSON(results, req.OutputPath)
+	default:
+		// table: already streamed during scan; nothing more to do
+	}
+	return nil
+}
+
+func buildBatchRequest(args []string, opts batchCommandOptions) (batchRequest, error) {
+	if err := validateOutputFormat(opts.Format); err != nil {
+		return batchRequest{}, err
+	}
+	if err := validateTimeout(opts.Timeout); err != nil {
+		return batchRequest{}, err
+	}
+	if opts.Format == outputFormatHTML && opts.OutputPath == "" {
+		return batchRequest{}, fmt.Errorf("--output <file> is required when --format html")
+	}
+	if opts.Format == outputFormatJSON && opts.OutputPath == "" {
+		return batchRequest{}, fmt.Errorf("--output <file> is required when --format json")
+	}
+	if opts.Concurrency < 1 {
+		return batchRequest{}, fmt.Errorf("--concurrency must be at least 1")
+	}
+
+	hasArg := len(args) == 1 && args[0] != ""
+	hasInput := opts.InputPath != ""
+	if hasArg && hasInput {
+		return batchRequest{}, fmt.Errorf("provide either a positional owner/repo argument or --input, not both")
+	}
+	if !hasArg && !hasInput {
+		return batchRequest{}, fmt.Errorf("provide either an owner/user name, a comma-separated list of owner/repo, or --input <file>")
+	}
+
+	target := ""
+	if hasArg {
+		target = args[0]
+	}
+
+	return batchRequest{
+		Target:          target,
+		Format:          opts.Format,
+		OutputPath:      opts.OutputPath,
+		Concurrency:     opts.Concurrency,
+		IncludeArchived: opts.IncludeArchived,
+		InputPath:       opts.InputPath,
+		Rules:           opts.Rules,
+		Categories:      opts.Categories,
+		Severities:      opts.Severities,
+		IncludeSuccess:  opts.IncludeSuccess,
+		Debug:           opts.Debug,
+		Timeout:         opts.Timeout,
+		TokenStdin:      opts.TokenStdin,
+		ConfigPath:      opts.ConfigPath,
+	}, nil
+}
+
+// runBatchScans executes scans concurrently and returns ordered results.
+// For table format, it also streams each result to stdout as it completes.
+func runBatchScans(ctx context.Context, repos []string, s *scanner.Scanner, cfg *scanner.Config, concurrency int, opts batchScanOptions) []batchRepoResult {
+	total := len(repos)
+	// Each worker owns one unique result index. The slice is pre-sized and never
+	// appended to while workers run, so concurrent writes to distinct elements are safe.
+	results := make([]batchRepoResult, total)
+
+	var progressMu sync.Mutex
+	completed := 0
+	g, groupCtx := errgroup.WithContext(ctx)
+	g.SetLimit(concurrency)
+
+	for i, repoFull := range repos {
+		idx, repoFull := i, repoFull
+		g.Go(func() error {
+			owner, repo, err := scanner.ParseRepoURL(repoFull)
+			if err != nil {
+				progressMu.Lock()
+				completed++
+				fmt.Fprintf(os.Stderr, "[%d/%d] %s — skipped: %v\n", completed, total, repoFull, err)
+				progressMu.Unlock()
+				results[idx] = batchRepoResult{RepoFullName: repoFull, Err: err, Index: idx}
+				return nil
+			}
+
+			// Build a per-repo debug logger that writes under progressMu so
+			// interleaved batch output doesn't corrupt the terminal.
+			var repoDebugLog scanner.DebugLogger
+			if opts.Debug {
+				repoDebugLog = func(repo, msg string) {
+					progressMu.Lock()
+					fmt.Fprintf(os.Stderr, "[DEBUG] %s | %s\n", repo, msg)
+					progressMu.Unlock()
+				}
+			}
+
+			scanCtx, cancel := context.WithTimeout(groupCtx, opts.Timeout)
+			result, scanErr := s.ScanRepoWithOptions(scanCtx, owner, repo, scanner.ScanOptions{
+				RuleNames:      opts.Rules,
+				Categories:     opts.Categories,
+				Severities:     opts.Severities,
+				IncludeSuccess: opts.IncludeSuccess,
+				Config:         cfg,
+				DebugLog:       repoDebugLog,
+			})
+			cancel()
+
+			progressMu.Lock()
+			completed++
+			if scanErr != nil {
+				fmt.Fprintf(os.Stderr, "[%d/%d] %s — error: %v\n", completed, total, repoFull, scanErr)
+			} else if result.Error != "" {
+				fmt.Fprintf(os.Stderr, "[%d/%d] %s — %s\n", completed, total, repoFull, result.Error)
+			} else {
+				counts := result.CountBySeverity()
+				numFindings := 0
+				for _, c := range counts {
+					numFindings += c
+				}
+				fmt.Fprintf(os.Stderr, "[%d/%d] %s — %d finding(s)\n", completed, total, repoFull, numFindings)
+			}
+
+			// Stream table output immediately
+			if opts.OutputFormat == outputFormatTable {
+				if scanErr != nil {
+					fmt.Printf("Repository: %s\nError: %v\n\n", repoFull, scanErr)
+				} else {
+					printTable(result)
+					fmt.Println()
+				}
+			}
+			progressMu.Unlock()
+
+			if scanErr != nil {
+				results[idx] = batchRepoResult{RepoFullName: repoFull, Err: scanErr, Index: idx}
+			} else {
+				results[idx] = batchRepoResult{RepoFullName: repoFull, Result: result, Index: idx}
+			}
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return []batchRepoResult{{Err: err}}
+	}
+	return results
+}
+
+// fetchRepoList returns all non-archived (or all if includeArchived) repos
+// for the given user or org sorted by most recent push, using pagination.
+func fetchRepoList(ctx context.Context, client *github.Client, owner string, includeArchived bool) ([]string, error) {
+	user, _, err := client.Users.Get(ctx, owner)
+	if err == nil && user.GetType() == "Organization" {
+		return fetchOrgRepoList(ctx, client, owner, includeArchived)
+	}
+	return fetchUserRepoList(ctx, client, owner, includeArchived)
+}
+
+func fetchUserRepoList(ctx context.Context, client *github.Client, owner string, includeArchived bool) ([]string, error) {
+	var repos []string
+	opts := &github.RepositoryListByUserOptions{
+		Sort:      "pushed",
+		Direction: "desc",
+		ListOptions: github.ListOptions{
+			PerPage: 100,
+		},
+	}
+
+	for {
+		page, resp, err := client.Repositories.ListByUser(ctx, owner, opts)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range page {
+			if !includeArchived && r.GetArchived() {
+				continue
+			}
+			repos = append(repos, r.GetFullName())
+		}
+		if resp.NextPage == 0 {
+			break
+		}
+		opts.Page = resp.NextPage
+	}
+
+	fmt.Fprintf(os.Stderr, "Repo listing: used user endpoint for %s, found %d repo(s)\n", owner, len(repos))
+	return repos, nil
+}
+
+func fetchOrgRepoList(ctx context.Context, client *github.Client, owner string, includeArchived bool) ([]string, error) {
+	var repos []string
+	opts := &github.RepositoryListByOrgOptions{
+		Type:      "all",
+		Sort:      "pushed",
+		Direction: "desc",
+		ListOptions: github.ListOptions{
+			PerPage: 100,
+		},
+	}
+
+	for {
+		page, resp, err := client.Repositories.ListByOrg(ctx, owner, opts)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range page {
+			if !includeArchived && r.GetArchived() {
+				continue
+			}
+			repos = append(repos, r.GetFullName())
+		}
+		if resp.NextPage == 0 {
+			break
+		}
+		opts.Page = resp.NextPage
+	}
+
+	fmt.Fprintf(os.Stderr, "Repo listing: used organization endpoint for %s, found %d repo(s)\n", owner, len(repos))
+	return repos, nil
+}
+
+// parseRepoList parses a comma-separated list of owner/repo strings.
+func parseRepoList(input string) ([]string, error) {
+	parts := strings.Split(input, ",")
+	var repos []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		owner, repo, err := scanner.ParseRepoURL(p)
+		if err != nil {
+			return nil, fmt.Errorf("invalid repo %q: %w", p, err)
+		}
+		repos = append(repos, owner+"/"+repo)
+	}
+	if len(repos) == 0 {
+		return nil, fmt.Errorf("no valid owner/repo entries found in argument")
+	}
+	return repos, nil
+}
+
+// repoListFromFile reads one owner/repo per line from a file.
+// Blank lines and lines starting with # are ignored.
+func repoListFromFile(path string) (repos []string, err error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if closeErr := f.Close(); err == nil && closeErr != nil {
+			err = closeErr
+		}
+	}()
+
+	sc := bufio.NewScanner(f)
+	lineNum := 0
+	for sc.Scan() {
+		lineNum++
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		owner, repo, err := scanner.ParseRepoURL(line)
+		if err != nil {
+			return nil, fmt.Errorf("line %d: invalid repo %q: %w", lineNum, line, err)
+		}
+		repos = append(repos, owner+"/"+repo)
+	}
+	if err := sc.Err(); err != nil {
+		return nil, err
+	}
+	if len(repos) == 0 {
+		return nil, fmt.Errorf("no valid owner/repo entries found in %q", path)
+	}
+	return repos, nil
+}

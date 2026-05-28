@@ -1,0 +1,12 @@
+FROM dhi.io/busybox:1
+
+ARG TARGETPLATFORM
+
+COPY ${TARGETPLATFORM}/gasa /usr/bin/gasa
+
+# run as distroless-style nonroot user/group (uid/gid 65532) in final image
+USER 65532:65532
+
+# checkov:skip=CKV_DOCKER_2: HEALTHCHECK is not applicable to a CLI-only image
+ENTRYPOINT ["/usr/bin/gasa"]
+CMD ["--help"]

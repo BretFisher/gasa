@@ -1,0 +1,212 @@
+# AGENTS.md - GitHub Actions Security Assessment
+
+> This file provides context for AI coding assistants working on this project.
+> It documents the current reality of the repo: a CLI-only security scanner for GitHub Actions and related repository settings.
+
+---
+
+Prefer retrieval-led reasoning over pre-trained training-led reasoning
+
+Before writing code, first explore the project structure
+
+## Docs pages
+
+@PLAN.md - Project plan
+
+## What This Is
+
+A Go CLI that scans a GitHub repository, user, or org for GitHub Actions security issues and related maintenance gaps.
+
+It focuses on:
+
+- insecure workflow triggers
+- unpinned third-party actions
+- missing or overly broad workflow permissions
+- risky repository-level Actions settings
+- missing or incomplete Dependabot configuration
+
+
+## Product Naming
+
+- Human-readable name: **GitHub Actions Security Assessment**
+- CLI command: **`gasa`**
+
+Use those names consistently in docs, help text, examples, and future code changes.
+
+## Scope
+
+The scanner is intentionally focused on GitHub Actions security and closely related repo hygiene.
+Avoid expanding into unrelated tooling or broad platform scanning unless explicitly requested.
+
+## Current Architecture
+
+### Tech Stack
+
+- **Go 1.26+**
+- **google/go-github/v84**
+- **yaml.v3**
+- **spf13/cobra** (CLI framework)
+- **charm.land/lipgloss/v2** (terminal styling and tables)
+- **CLI-first design**
+
+### Project Structure
+
+```text
+/app
+├── cmd/
+│   └── gasa/
+│       ├── main.go            # CLI entrypoint (Cobra commands)
+│       └── output.go          # Human and JSON output formatting (lipgloss v2)
+├── internal/
+│   └── scanner/
+│       ├── scanner.go         # Scan orchestration
+│       ├── workflow.go        # Workflow file checks
+│       ├── settings.go        # Repo Actions settings checks
+│       ├── dependabot.go      # Dependabot config checks
+│       ├── rules.go           # Rule registry, aliases, categories, CLI rule selection
+│       └── findings.go        # Finding types, severities
+├── go.mod
+├── go.sum
+└── Makefile
+```
+
+### Important Commands
+
+From the repo root:
+
+```bash
+go run ./app/cmd/gasa --help
+go run ./app/cmd/gasa rules
+go run ./app/cmd/gasa run owner/repo
+go run ./app/cmd/gasa run --debug owner/repo
+go run ./app/cmd/gasa run --rule fork-pr-approval owner/repo
+go run ./app/cmd/gasa run --category workflows owner/repo
+```
+
+From `app/`:
+
+```bash
+go run ./cmd/gasa --help
+go run ./cmd/gasa run owner/repo
+go run ./cmd/gasa run --debug owner/repo
+make build
+./bin/gasa --help
+```
+
+---
+
+## Security Checks Implemented
+
+The CLI currently checks these areas:
+
+### Workflows
+
+1. **Pull Request Target**
+   - Detects `pull_request_target`
+2. **Action Version Pinning**
+   - Detects `uses:` references pinned to tags or branches instead of full commit SHAs
+3. **Workflow Permissions**
+   - Detects workflows without explicit `permissions`
+
+### Repository Settings
+
+4. **Allowed Actions Policy**
+   - Detects repositories that allow all actions
+5. **Default Workflow Permissions**
+   - Detects repo default `GITHUB_TOKEN` set to write
+6. **Actions Can Approve PRs**
+   - Detects Actions being allowed to approve pull requests
+7. **Fork PR Workflow Approval**
+   - Detects less restrictive approval policies than `all_external_contributors`
+
+### Updates
+
+8. **Dependabot Configuration**
+   - Detects missing config, invalid config, and missing `github-actions` coverage
+9. **Dependabot GitHub Actions Cooldown**
+   - Detects `github-actions` Dependabot update entries that do not set `cooldown`
+
+Detailed rule documentation lives in `docs/rules/`.
+Each rule doc should describe:
+
+- what the rule checks
+- how the scanner evaluates it
+- exact API calls or workflow fields used
+- bad and good examples
+- links to relevant official GitHub docs
+
+---
+
+## CLI Behavior
+
+### Authentication Order
+
+The CLI resolves credentials in this order:
+
+1. `--token-stdin`
+2. `GITHUB_TOKEN`
+3. `GH_TOKEN`
+4. `gh auth token` with a short timeout
+
+### Output Modes
+
+- `--format table` by default with severity-colored terminal tables (lipgloss v2)
+- `--format json` for machine-readable output
+- `--format html` for browser-friendly reports
+- status and progress go to stderr
+- `--debug` is a global flag that writes diagnostic single-line output to stderr only
+- debug lines use the format `[DEBUG] owner/repo | message`
+- debug output must stay repo-prefixed and single-line so interleaved batch scans remain readable
+- results go to stdout
+- terminal width is auto-detected for table formatting
+
+### Subcommands
+
+- `gasa run <owner/repo>` — scan a repository
+- `gasa batch <owner-or-user | owner/repo,...>` — scan multiple repositories and combine results
+- `gasa rules` — list available rules and aliases
+
+### Rule Selection
+
+The `run` subcommand supports:
+
+- `--rule <name-or-alias>` — filter by individual rule names or aliases
+- `--category <name>` — filter by rule category (e.g. `workflows`, `settings`, `updates`)
+- repeated or comma-separated values for both flags
+- `--rule` and `--category` are mutually exclusive
+
+Canonical rule names are endpoint-style where helpful, and short aliases are supported for day-to-day use.
+
+---
+
+## Current Build Targets
+
+`app/Makefile`:
+
+- `make run` - show CLI help
+- `make build` - build `bin/gasa`
+- `make test` - run Go tests
+- `make deps` - tidy modules
+- `make fmt` - format Go code
+- `make clean` - remove built artifacts
+
+---
+
+## Known Issues / Technical Debt
+
+- scanner checks still run sequentially in `app/internal/scanner/scanner.go`
+- unauthenticated scans are limited by GitHub's 60 requests/hour API limit
+- token permission guidance should also be added to the relevant rule docs that use repository settings APIs
+- CLI help/auth troubleshooting should be expanded so users can quickly identify the minimal token permissions needed for full scans
+
+---
+
+## Guidance For Future Changes
+
+- Always run `make -C app build` and the relevant test command at the end of each task.
+
+- If adding a rule, update all of these together:
+  - `app/internal/scanner/`
+  - `docs/rules/`
+  - `README.md`
+  - CLI rule listing and aliases if appropriate

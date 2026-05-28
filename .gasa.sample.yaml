@@ -1,0 +1,46 @@
+# Sample gasa configuration.
+#
+# This file is not auto-loaded because of its name.
+# To use it directly:
+#   gasa run --config .gasa.sample.yaml owner/repo
+#
+# To make it your active local config, copy or rename it to:
+#   .gasa.yml
+# or:
+#   .gasa.yaml
+
+# Select which built-in rules should run by default.
+# If `include` is omitted, all built-in rules are eligible to run.
+rules:
+  include:
+    - workflows/action-version-pinning
+    - workflows/pull-request-target
+
+  # Exclude rules from the selected set above.
+  exclude:
+    - updates/update-tool-actions-cooldown
+
+# Override the default severity for specific built-in rules.
+overrides:
+  - rule: workflows/action-version-pinning
+    severity: critical
+
+# Configure rule-specific behavior.
+rule_options:
+  workflows/action-version-pinning:
+    # Ignore mutable refs for actions in the same GitHub owner as the repo
+    # being scanned. This is useful when you control those actions through
+    # your own release and update process.
+    ignore_same_owner: true
+
+  updates/update-tool-configuration:
+    # Only run the update tool configuration rule when the repository actually
+    # has workflow YAML files under .github/workflows.
+    require_workflows: true
+
+# Suppress known and reviewed findings.
+# You can scope suppressions by rule, finding_id, and/or path.
+suppressions:
+  - rule: workflows/workflow-permissions
+    path: .github/workflows/legacy.yml
+    reason: reviewed exception

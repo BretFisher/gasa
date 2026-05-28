@@ -1,0 +1,24 @@
+# go artifacts
+app/bin/
+dist/
+
+# macs and windows
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# AI
+.claude/settings.local.json
+
+# repo specific
+.gasa.yaml
+.gasa.yml
+*.html
