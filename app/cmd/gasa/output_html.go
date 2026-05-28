@@ -192,8 +192,27 @@ const htmlBaseCSS = `
   --sev-info-bg: #f3f4f6;     --sev-info-fg: #667085;
   --sev-success-bg: #ecfdf3;  --sev-success-fg: #166534;
 }
+:root[data-theme="dark"] {
+  --bg: #0d1117;
+  --fg: #e6edf3;
+  --muted: #9ca3af;
+  --card-bg: #161b22;
+  --card-border: #30363d;
+  --card-shadow: 0 1px 2px rgba(0,0,0,0.4);
+  --badge-bg: #21262d;
+  --row-border: #21262d;
+  --th-fg: #c9d1d9;
+  --link: #58a6ff;
+  --sev-critical-bg: #7f1d1d; --sev-critical-fg: #fee2e2;
+  --sev-high-bg: #3b1418;     --sev-high-fg: #fca5a5;
+  --sev-medium-bg: #3a2e08;   --sev-medium-fg: #fde68a;
+  --sev-low-bg: #052e2e;      --sev-low-fg: #a5f3fc;
+  --sev-info-bg: #1f2937;     --sev-info-fg: #9ca3af;
+  --sev-success-bg: #052e16;  --sev-success-fg: #86efac;
+}
+/* No-JS fallback: if data-theme is never set, follow the system. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     --bg: #0d1117;
     --fg: #e6edf3;
     --muted: #9ca3af;
@@ -212,6 +231,15 @@ const htmlBaseCSS = `
     --sev-success-bg: #052e16;  --sev-success-fg: #86efac;
   }
 }
+.theme-toggle {
+  position: fixed; top: 1rem; right: 1rem; z-index: 100;
+  background: var(--card-bg); color: var(--fg);
+  border: 1px solid var(--card-border); border-radius: 999px;
+  padding: 0.4rem 0.85rem; font-size: 0.85rem; font-family: inherit;
+  cursor: pointer; box-shadow: var(--card-shadow);
+}
+.theme-toggle:hover { background: var(--badge-bg); }
+@media print { .theme-toggle { display: none; } }
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--fg); background: var(--bg); margin: 0; padding: 2rem; }
 .wrap { max-width: 1100px; margin: 0 auto; }
 h1 { margin: 0 0 0.5rem; font-size: 1.9rem; }
@@ -235,15 +263,55 @@ a:hover { text-decoration: underline; }
 @media print { body { background: #fff; color: #16181d; padding: 0; } .card { box-shadow: none; break-inside: avoid; } }
 `
 
+// htmlThemeScript resolves the theme before paint and wires up the toggle.
+// Runs synchronously in <head> so data-theme is set on <html> before <body> renders.
+const htmlThemeScript = `<script>
+(function(){
+  var KEY = 'gasa-theme';
+  var mq = window.matchMedia('(prefers-color-scheme: dark)');
+  function resolved(pref){
+    if (pref === 'light' || pref === 'dark') return pref;
+    return mq.matches ? 'dark' : 'light';
+  }
+  function apply(pref){
+    document.documentElement.setAttribute('data-theme', resolved(pref));
+    var btn = document.querySelector('[data-theme-toggle]');
+    if (btn) btn.textContent = 'Theme: ' + (pref || 'auto');
+  }
+  apply(localStorage.getItem(KEY));
+  mq.addEventListener('change', function(){
+    var p = localStorage.getItem(KEY);
+    if (!p) apply(null);
+  });
+  document.addEventListener('DOMContentLoaded', function(){
+    apply(localStorage.getItem(KEY));
+    var btn = document.querySelector('[data-theme-toggle]');
+    if (!btn) return;
+    btn.addEventListener('click', function(){
+      var cur = localStorage.getItem(KEY) || 'auto';
+      var next = cur === 'auto' ? 'light' : cur === 'light' ? 'dark' : 'auto';
+      if (next === 'auto') localStorage.removeItem(KEY);
+      else localStorage.setItem(KEY, next);
+      apply(next === 'auto' ? null : next);
+    });
+  });
+})();
+</script>`
+
+const htmlThemeButton = `<button type="button" class="theme-toggle" data-theme-toggle aria-label="Toggle theme">Theme: auto</button>`
+
 const htmlResultTemplate = `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
   <title>{{ .RepoFullName }} - gasa report</title>
+  ` + htmlThemeScript + `
   <style>` + htmlBaseCSS + `</style>
 </head>
 <body>
+  ` + htmlThemeButton + `
   <div class="wrap">
     <h1>{{ .RepoFullName }}</h1>
     <div class="summary">GitHub Actions Security Assessment report</div>
@@ -271,10 +339,13 @@ const htmlRulesTemplate = `<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
   <title>gasa rules</title>
+  ` + htmlThemeScript + `
   <style>` + htmlBaseCSS + `</style>
 </head>
 <body>
+  ` + htmlThemeButton + `
   <div class="wrap">
     <h1>Available Rules</h1>
     <div class="summary">Canonical rule names and aliases</div>
