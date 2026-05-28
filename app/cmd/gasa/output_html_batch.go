@@ -36,11 +36,12 @@ func repoAnchor(repoFull string) string {
 	return strings.ReplaceAll(repoFull, "/", "-")
 }
 
-// repoStateClass returns the 3-state CSS class for sidebar coloring.
+// repoStateClass returns the 4-state CSS class for sidebar coloring.
 //
-//	"error"    — scan failed entirely or returned a result-level error
-//	"findings" — scan succeeded but has one or more non-success findings
-//	"clean"    — scan succeeded with zero findings
+//	"error"         — scan failed entirely or returned a result-level error
+//	"high-findings" — scan succeeded and has one or more HIGH or CRITICAL severity findings
+//	"findings"      — scan succeeded but has one or more non-success findings (medium/low/info)
+//	"clean"         — scan succeeded with zero findings
 func repoStateClass(r batchRepoResult) string {
 	if r.Err != nil {
 		return "error"
@@ -49,10 +50,22 @@ func repoStateClass(r batchRepoResult) string {
 		return "error"
 	}
 	if r.Result != nil {
+		hasHighOrCritical := false
+		hasFindings := false
 		for _, f := range r.Result.Findings {
 			if !f.Success {
-				return "findings"
+				hasFindings = true
+				if f.Severity == scanner.SeverityHigh || f.Severity == scanner.SeverityCritical {
+					hasHighOrCritical = true
+					break // Found high/critical, no need to continue
+				}
 			}
+		}
+		if hasHighOrCritical {
+			return "high-findings"
+		}
+		if hasFindings {
+			return "findings"
 		}
 	}
 	return "clean"
@@ -212,9 +225,10 @@ const htmlBatchCSS = `
 .sidebar a { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 1rem; font-size: 0.82rem; color: var(--th-fg); text-decoration: none; line-height: 1.3; word-break: break-all; }
 .sidebar a:hover { background: var(--badge-bg); text-decoration: none; }
 .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-.dot-clean    { background: #16a34a; }
-.dot-findings { background: #d97706; }
-.dot-error    { background: #9ca3af; }
+.dot-clean         { background: #16a34a; }
+.dot-high-findings { background: #dc2626; }
+.dot-findings      { background: #d97706; }
+.dot-error         { background: #9ca3af; }
 .main { flex: 1; padding: 2rem; min-width: 0; }
 /* summary section */
 .summary-section { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1.75rem; }
