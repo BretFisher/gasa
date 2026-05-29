@@ -169,7 +169,9 @@ func TestScanRepo_OnlyUsesGETRequests(t *testing.T) {
 
 	mux.HandleFunc("/repos/owner/repo", func(w http.ResponseWriter, r *http.Request) {
 		methods = append(methods, r.Method)
-		_ = json.NewEncoder(w).Encode(map[string]any{"full_name": "owner/repo", "default_branch": "main"})
+		if err := json.NewEncoder(w).Encode(map[string]any{"full_name": "owner/repo", "default_branch": "main"}); err != nil {
+			t.Errorf("failed to encode response: %v", err)
+		}
 	})
 	mux.HandleFunc("/repos/owner/repo/contents/.github/workflows", func(w http.ResponseWriter, r *http.Request) {
 		methods = append(methods, r.Method)
@@ -185,15 +187,21 @@ func TestScanRepo_OnlyUsesGETRequests(t *testing.T) {
 	})
 	mux.HandleFunc("/repos/owner/repo/actions/permissions", func(w http.ResponseWriter, r *http.Request) {
 		methods = append(methods, r.Method)
-		_ = json.NewEncoder(w).Encode(map[string]any{"enabled": true, "allowed_actions": "selected"})
+		if err := json.NewEncoder(w).Encode(map[string]any{"enabled": true, "allowed_actions": "selected"}); err != nil {
+			t.Errorf("failed to encode response: %v", err)
+		}
 	})
 	mux.HandleFunc("/repos/owner/repo/actions/permissions/workflow", func(w http.ResponseWriter, r *http.Request) {
 		methods = append(methods, r.Method)
-		_ = json.NewEncoder(w).Encode(map[string]any{"default_workflow_permissions": "read", "can_approve_pull_request_reviews": false})
+		if err := json.NewEncoder(w).Encode(map[string]any{"default_workflow_permissions": "read", "can_approve_pull_request_reviews": false}); err != nil {
+			t.Errorf("failed to encode response: %v", err)
+		}
 	})
 	mux.HandleFunc("/repos/owner/repo/actions/permissions/fork-pr-contributor-approval", func(w http.ResponseWriter, r *http.Request) {
 		methods = append(methods, r.Method)
-		_ = json.NewEncoder(w).Encode(map[string]any{"approval_policy": "all_external_contributors"})
+		if err := json.NewEncoder(w).Encode(map[string]any{"approval_policy": "all_external_contributors"}); err != nil {
+			t.Errorf("failed to encode response: %v", err)
+		}
 	})
 
 	_, err := scanner.ScanRepo(context.Background(), "owner", "repo")
@@ -222,9 +230,11 @@ func TestScanRepo_GracefulOnErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			scanner, mux := newTestScanner(t, false)
-			mux.HandleFunc("/repos/owner/repo", func(w http.ResponseWriter, r *http.Request) {
+			mux.HandleFunc("/repos/owner/repo", func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(tt.status)
-				_, _ = w.Write([]byte(`{"message":"error"}`))
+				if _, err := w.Write([]byte(`{"message":"error"}`)); err != nil {
+					t.Errorf("failed to write response: %v", err)
+				}
 			})
 
 			result, err := scanner.ScanRepo(context.Background(), "owner", "repo")

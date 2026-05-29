@@ -83,7 +83,7 @@ func TestRetryTransportHonorsRetryAfter(t *testing.T) {
 		}
 		return testResponse(req, http.StatusOK, nil), nil
 	})
-	transport.sleep = func(ctx context.Context, delay time.Duration) error {
+	transport.sleep = func(_ context.Context, delay time.Duration) error {
 		slept = append(slept, delay)
 		return nil
 	}
@@ -110,7 +110,7 @@ func TestRetryTransportHonorsPrimaryRateLimitReset(t *testing.T) {
 		return testResponse(req, http.StatusOK, nil), nil
 	})
 	transport.now = func() time.Time { return now }
-	transport.sleep = func(ctx context.Context, delay time.Duration) error {
+	transport.sleep = func(_ context.Context, delay time.Duration) error {
 		slept = append(slept, delay)
 		return nil
 	}

@@ -10,6 +10,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	packageEcosystemGitHubActions = "github-actions"
+)
+
 // ---------------------------------------------------------------------------
 // Dependabot types
 // ---------------------------------------------------------------------------
@@ -110,10 +114,8 @@ func (c *factCollector) collectDependabotFacts(ctx context.Context, owner, repo 
 				dbg(repoFull, "found dependabot config at .github/dependabot.yaml")
 			}
 		}
-	} else {
-		if dbg != nil {
-			dbg(repoFull, "found dependabot config at .github/dependabot.yml")
-		}
+	} else if dbg != nil {
+		dbg(repoFull, "found dependabot config at .github/dependabot.yml")
 	}
 
 	if err != nil {
@@ -138,7 +140,7 @@ func (c *factCollector) collectDependabotFacts(ctx context.Context, owner, repo 
 					dbg(repoFull, fmt.Sprintf("dependabot config parsed: %d update entries, covers-actions=%v", len(config.Updates), coversActions))
 				}
 				for _, u := range config.Updates {
-					if u.PackageEcosystem == "github-actions" && dbg != nil {
+					if u.PackageEcosystem == packageEcosystemGitHubActions && dbg != nil {
 						dbg(repoFull, fmt.Sprintf("dependabot github-actions entry: cooldown=%v", u.Cooldown != nil))
 					}
 				}
@@ -230,7 +232,7 @@ func evaluateUpdateToolConfigurationFacts(facts *ScanFacts) []Finding {
 	// --- neither tool is configured ---
 	if dep.Missing && ren.Missing {
 		return append(findings, Finding{
-			ID:          "no-update-tool",
+			ID:          findingIDNoUpdateTool,
 			Severity:    SeverityMedium,
 			Title:       "No dependency update tool configured",
 			Description: "This repository has neither a Dependabot configuration file nor a Renovate configuration file. Automated dependency update tooling keeps action versions and package dependencies current and helps catch vulnerable or malicious releases.",
@@ -323,7 +325,7 @@ func evaluateUpdateToolConfigurationFacts(facts *ScanFacts) []Finding {
 // github-actions ecosystem entry.
 func dependabotCoversActions(cfg *DependabotConfig) bool {
 	for _, u := range cfg.Updates {
-		if u.PackageEcosystem == "github-actions" {
+		if u.PackageEcosystem == packageEcosystemGitHubActions {
 			return true
 		}
 	}
@@ -334,13 +336,13 @@ func dependabotCoversActions(cfg *DependabotConfig) bool {
 // auto-configured) to manage GitHub Actions updates.
 //
 // Renovate enables all managers by default when enabledManagers is absent or
-// empty. If the field is explicitly set, "github-actions" must appear in it.
+// empty. If the field is explicitly set, packageEcosystemGitHubActions must appear in it.
 func renovateCoversActions(cfg *RenovateConfig) bool {
 	if len(cfg.EnabledManagers) == 0 {
 		return true // auto-enabled
 	}
 	for _, m := range cfg.EnabledManagers {
-		if strings.EqualFold(m, "github-actions") {
+		if strings.EqualFold(m, packageEcosystemGitHubActions) {
 			return true
 		}
 	}
@@ -398,7 +400,7 @@ func evaluateUpdateToolActionsCooldownFacts(facts *ScanFacts) []Finding {
 // has a github-actions entry with a cooldown block.
 func dependabotActionsCooldownConfigured(cfg *DependabotConfig) bool {
 	for _, u := range cfg.Updates {
-		if u.PackageEcosystem == "github-actions" && u.Cooldown != nil {
+		if u.PackageEcosystem == packageEcosystemGitHubActions && u.Cooldown != nil {
 			return true
 		}
 	}

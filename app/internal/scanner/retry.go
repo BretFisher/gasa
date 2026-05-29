@@ -122,7 +122,8 @@ func closeResponseBody(resp *http.Response) {
 	if resp == nil || resp.Body == nil {
 		return
 	}
-	_, _ = io.Copy(io.Discard, resp.Body)
+	// Drain and discard the response body before closing to allow connection reuse
+	_, _ = io.Copy(io.Discard, resp.Body) //nolint:errcheck // intentionally draining and discarding
 	_ = resp.Body.Close()
 }
 

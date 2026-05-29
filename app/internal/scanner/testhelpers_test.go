@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -24,7 +25,10 @@ func newTestScanner(t *testing.T, authenticated bool) (*Scanner, *http.ServeMux)
 	t.Cleanup(server.Close)
 
 	client := github.NewClient(nil)
-	baseURL, _ := url.Parse(server.URL + testBaseURLPath + "/")
+	baseURL, err := url.Parse(server.URL + testBaseURLPath + "/")
+	if err != nil {
+		t.Fatalf("failed to parse test URL: %v", err)
+	}
 	client.BaseURL = baseURL
 
 	return &Scanner{
@@ -38,14 +42,16 @@ func newTestFactCollector(s *Scanner) *factCollector {
 }
 
 func handleJSON(mux *http.ServeMux, path string, v any) {
-	mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(v)
+	mux.HandleFunc(path, func(w http.ResponseWriter, _ *http.Request) {
+		if err := json.NewEncoder(w).Encode(v); err != nil {
+			panic(fmt.Sprintf("failed to encode test JSON: %v", err))
+		}
 	})
 }
 
 func handle404(mux *http.ServeMux, paths ...string) {
 	for _, path := range paths {
-		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc(path, func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 		})
 	}

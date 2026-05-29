@@ -99,10 +99,8 @@ func (c *factCollector) collectWorkflowFacts(ctx context.Context, owner, repo st
 			if dbg != nil {
 				dbg(repoFull, "workflow parsed OK: "+*file.Path)
 			}
-		} else {
-			if dbg != nil {
-				dbg(repoFull, "workflow parse error "+*file.Path+": "+err.Error())
-			}
+		} else if dbg != nil {
+			dbg(repoFull, "workflow parse error "+*file.Path+": "+err.Error())
 		}
 
 		workflows = append(workflows, fact)

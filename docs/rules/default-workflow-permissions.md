@@ -35,6 +35,19 @@ This rule uses the repository Actions settings API, so full scans need fine-grai
 
 This is the fallback permission level workflows inherit when they do not define their own `permissions:` block. `write` gives broad write capability by default. `read` forces workflows to explicitly request elevated access.
 
+## ⚠️ Important Warning
+
+**Changing this setting from "write" to "read" can break existing workflows** that require write permissions but don't have explicit `permissions:` blocks defined.
+
+Before changing the repository default to read-only:
+
+1. **First**, ensure all workflows that need write access have explicit `permissions:` blocks (checked by the `workflow-permissions` rule)
+2. **Then**, change the repository default setting to read-only
+
+If you change the repository setting first, workflows that depend on inherited write permissions will fail until you add explicit permission blocks to them.
+
+See the `workflow-permissions` rule documentation for guidance on adding explicit permissions to workflows.
+
 ## Bad example
 
 ```text

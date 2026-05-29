@@ -13,6 +13,11 @@ import (
 	"github.com/google/go-github/v84/github"
 )
 
+const (
+	rateLimitMsg          = "API rate limit exceeded. Try again later."
+	findingIDNoUpdateTool = "no-update-tool"
+)
+
 // Scanner performs security checks on GitHub repositories
 type Scanner struct {
 	client        *github.Client
@@ -139,7 +144,7 @@ func (s *Scanner) ScanRepoWithOptions(ctx context.Context, owner, repo string, o
 func classifyGitHubRepoAccessError(err error) string {
 	var rateLimitErr *github.RateLimitError
 	if errors.As(err, &rateLimitErr) {
-		return "API rate limit exceeded. Try again later."
+		return rateLimitMsg
 	}
 
 	var abuseRateLimitErr *github.AbuseRateLimitError
@@ -161,11 +166,11 @@ func classifyGitHubRepoAccessError(err error) string {
 			return "Authentication failed (token rejected)"
 		case http.StatusForbidden:
 			if isPrimaryRateLimitResponse(ghErr.Response) {
-				return "API rate limit exceeded. Try again later."
+				return rateLimitMsg
 			}
 			return "Access forbidden (check token scopes, SSO authorization, or organization access policies)"
 		case http.StatusTooManyRequests:
-			return "API rate limit exceeded. Try again later."
+			return rateLimitMsg
 		}
 	}
 
@@ -194,7 +199,7 @@ func buildFixURL(f Finding, owner, repo, defaultBranch string) string {
 		return settingsURL
 	case "settings-fork-pr-contributor-approval-too-permissive":
 		return settingsURL
-	case "no-update-tool":
+	case findingIDNoUpdateTool:
 		return fmt.Sprintf("%s/new/%s?filename=%s", repoURL, pathEscapeSegments(defaultBranch), url.QueryEscape(".github/dependabot.yml"))
 	case "invalid-dependabot", "update-tool-missing-actions":
 		return blobURL(owner, repo, defaultBranch, ".github/dependabot.yml", 0)
