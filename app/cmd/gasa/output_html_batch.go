@@ -24,11 +24,10 @@ type htmlBatchRepoEntry struct {
 
 // htmlBatchView is the top-level view model for the combined batch report.
 type htmlBatchView struct {
-	ScannedAt  string
-	TotalRepos int
-	ErrorCount int
-	AggrCounts map[string]int
-	Repos      []htmlBatchRepoEntry
+	ScannedAt   string
+	TotalRepos  int
+	StateCounts map[string]int // count of repos in each state class
+	Repos       []htmlBatchRepoEntry
 }
 
 // repoAnchor converts "owner/repo" into a safe HTML anchor id.
@@ -73,14 +72,12 @@ func repoStateClass(r batchRepoResult) string {
 
 // buildBatchView converts raw batchRepoResults into the HTML view model.
 func buildBatchView(results []batchRepoResult) htmlBatchView {
-	aggrCounts := map[string]int{
-		scanner.SeverityCritical: 0,
-		scanner.SeverityHigh:     0,
-		scanner.SeverityMedium:   0,
-		scanner.SeverityLow:      0,
-		scanner.SeverityInfo:     0,
+	stateCounts := map[string]int{
+		stateClassClean:        0,
+		stateClassFindings:     0,
+		stateClassHighFindings: 0,
+		stateClassError:        0,
 	}
-	errCount := 0
 	entries := make([]htmlBatchRepoEntry, 0, len(results))
 
 	for _, r := range results {
@@ -94,13 +91,10 @@ func buildBatchView(results []batchRepoResult) htmlBatchView {
 		case r.Err != nil:
 			entry.HasError = true
 			entry.ErrorMsg = r.Err.Error()
-			errCount++
 		case r.Result != nil && r.Result.Error != "":
 			entry.HasError = true
 			entry.ErrorMsg = r.Result.Error
-			errCount++
 		case r.Result != nil:
-			// Build finding views (same logic as single-repo printHTML)
 			for _, finding := range r.Result.Findings {
 				rows := []htmlFindingRow{
 					{Label: labelRule, Value: finding.Rule},
@@ -128,22 +122,17 @@ func buildBatchView(results []batchRepoResult) htmlBatchView {
 			}
 			entry.Counts = formatSeverityCounts(r.Result)
 			entry.Successes = r.Result.CountSuccesses()
-
-			// Add to aggregate counts
-			for sev, cnt := range r.Result.CountBySeverity() {
-				aggrCounts[sev] += cnt
-			}
 		}
 
+		stateCounts[entry.StateClass]++
 		entries = append(entries, entry)
 	}
 
 	return htmlBatchView{
-		ScannedAt:  time.Now().UTC().Format("2006-01-02 15:04:05 UTC"),
-		TotalRepos: len(results),
-		ErrorCount: errCount,
-		AggrCounts: aggrCounts,
-		Repos:      entries,
+		ScannedAt:   time.Now().UTC().Format("2006-01-02 15:04:05 UTC"),
+		TotalRepos:  len(results),
+		StateCounts: stateCounts,
+		Repos:       entries,
 	}
 }
 
@@ -223,9 +212,12 @@ const htmlBatchCSS = `
   box-sizing: border-box;
 }
 .sidebar-header { padding: 0 1rem 0.75rem; font-weight: 700; font-size: 0.9rem; color: var(--th-fg); border-bottom: 1px solid var(--row-border); margin-bottom: 0.5rem; }
-.sidebar-legend { padding: 0 1rem 0.75rem; font-size: 0.75rem; color: var(--muted); border-bottom: 1px solid var(--row-border); margin-bottom: 0.5rem; }
-.legend-item { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.3rem; line-height: 1.2; }
-.legend-item:last-child { margin-bottom: 0; }
+.sidebar-legend { padding: 0 0 0.5rem; font-size: 0.75rem; color: var(--muted); border-bottom: 1px solid var(--row-border); margin-bottom: 0.5rem; }
+.legend-item { display: flex; align-items: center; gap: 0.4rem; padding: 0.3rem 1rem; line-height: 1.2; cursor: pointer; }
+.legend-item:hover { background: var(--badge-bg); }
+.legend-item.legend-active { background: var(--badge-bg); font-weight: 700; color: var(--fg); }
+.legend-count { margin-left: auto; font-variant-numeric: tabular-nums; }
+.filter-hidden { display: none !important; }
 .sidebar a { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 1rem; font-size: 0.82rem; color: var(--th-fg); text-decoration: none; line-height: 1.3; word-break: break-all; }
 .sidebar a:hover { background: var(--badge-bg); text-decoration: none; }
 .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
@@ -234,12 +226,6 @@ const htmlBatchCSS = `
 .dot-findings      { background: #d97706; }
 .dot-error         { background: #ec4899; }
 .main { flex: 1; padding: 2rem; min-width: 0; }
-/* summary section */
-.summary-section { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1.75rem; }
-.summary-section h2 { margin: 0 0 0.75rem; font-size: 1.1rem; }
-.aggr-counts { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
-.error-list { margin: 0.5rem 0 0; padding-left: 1.25rem; font-size: 0.9rem; color: var(--muted); }
-.error-list li { margin: 0.2rem 0; }
 /* repo sections */
 .repo-section { margin-bottom: 2.5rem; }
 .repo-section h2 { font-size: 1.35rem; margin: 0 0 0.75rem; padding-bottom: 0.4rem; border-bottom: 2px solid var(--row-border); }
@@ -275,13 +261,15 @@ const htmlBatchTemplate = `<!doctype html>
     <nav class="sidebar" aria-label="Repository navigation">
       <div class="sidebar-header">{{ .TotalRepos }} repositories</div>
       <div class="sidebar-legend">
-        <div class="legend-item"><span class="dot dot-clean"></span><span>Clean (no findings)</span></div>
-        <div class="legend-item"><span class="dot dot-findings"></span><span>Medium/low findings</span></div>
-        <div class="legend-item"><span class="dot dot-high-findings"></span><span>High/critical findings</span></div>
-        <div class="legend-item"><span class="dot dot-error"></span><span>Scan error</span></div>
+        {{- $c := .StateCounts }}
+        <div class="legend-item" data-filter="all" tabindex="0"><span>All</span><span class="legend-count">{{ .TotalRepos }}</span></div>
+        <div class="legend-item" data-filter="clean" tabindex="0"><span class="dot dot-clean"></span><span>Clean</span><span class="legend-count">{{ index $c "clean" }}</span></div>
+        <div class="legend-item" data-filter="findings" tabindex="0"><span class="dot dot-findings"></span><span>Med / low findings</span><span class="legend-count">{{ index $c "findings" }}</span></div>
+        <div class="legend-item" data-filter="high-findings" tabindex="0"><span class="dot dot-high-findings"></span><span>High / critical</span><span class="legend-count">{{ index $c "high-findings" }}</span></div>
+        <div class="legend-item" data-filter="error" tabindex="0"><span class="dot dot-error"></span><span>Scan error</span><span class="legend-count">{{ index $c "error" }}</span></div>
       </div>
       {{ range .Repos }}
-      <a href="#{{ .Anchor }}">
+      <a href="#{{ .Anchor }}" data-state="{{ .StateClass }}">
         <span class="dot dot-{{ .StateClass }}"></span>{{ .RepoFullName }}
       </a>
       {{ end }}
@@ -293,26 +281,9 @@ const htmlBatchTemplate = `<!doctype html>
         <h1>GitHub Actions Security Assessment Batch Report</h1>
         <div class="summary">Scanned {{ .TotalRepos }} repositories &bull; {{ .ScannedAt }}</div>
 
-        <!-- Summary section -->
-        <div class="summary-section">
-          <h2>Summary</h2>
-          <div class="aggr-counts">
-            {{ $counts := .AggrCounts }}
-            {{ range $sev := (sliceSeverities) }}{{ $c := index $counts $sev }}{{ if gt $c 0 }}<span class="badge">{{ $c }} {{ $sev }}</span>{{ end }}{{ end }}
-            {{ if eq (sumCounts .AggrCounts) 0 }}<span class="badge">no findings</span>{{ end }}
-            {{ if gt .ErrorCount 0 }}<span class="badge">{{ .ErrorCount }} scan error{{ if ne .ErrorCount 1 }}s{{ end }}</span>{{ end }}
-          </div>
-          {{ if gt .ErrorCount 0 }}
-          <div>Scan errors (repo inaccessible or API failure):</div>
-          <ul class="error-list">
-            {{ range .Repos }}{{ if .HasError }}<li><strong>{{ .RepoFullName }}</strong>: {{ .ErrorMsg }}</li>{{ end }}{{ end }}
-          </ul>
-          {{ end }}
-        </div>
-
         <!-- Per-repo sections -->
         {{ range .Repos }}
-        <div class="repo-section" id="{{ .Anchor }}">
+        <div class="repo-section" id="{{ .Anchor }}" data-state="{{ .StateClass }}">
           <h2><a href="https://github.com/{{ .RepoFullName }}">{{ .RepoFullName }}</a></h2>
           {{ if .HasError }}
           <div class="repo-error-card">Scan error: {{ .ErrorMsg }}</div>
@@ -338,6 +309,35 @@ const htmlBatchTemplate = `<!doctype html>
       </div>
     </div>
   </div>
+  <script>
+  (function(){
+    var active = null;
+    function applyFilter(f) {
+      document.querySelectorAll('.legend-item[data-filter]').forEach(function(el) {
+        var key = el.getAttribute('data-filter');
+        var on = key === 'all' ? f === null : key === f;
+        el.classList.toggle('legend-active', on);
+        el.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+      document.querySelectorAll('[data-state]').forEach(function(el) {
+        el.classList.toggle('filter-hidden', f !== null && el.getAttribute('data-state') !== f);
+      });
+    }
+    document.querySelectorAll('.legend-item[data-filter]').forEach(function(item) {
+      item.setAttribute('role', 'button');
+      item.setAttribute('aria-pressed', 'false');
+      item.addEventListener('click', function() {
+        var f = this.getAttribute('data-filter');
+        active = (f === 'all' || active === f) ? null : f;
+        applyFilter(active);
+      });
+      item.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.click(); }
+      });
+    });
+    applyFilter(active);
+  })();
+  </script>
 </body>
 </html>
 `

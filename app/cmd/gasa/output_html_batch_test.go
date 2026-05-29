@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/bretfisher/github-security-assessment/app/internal/scanner"
@@ -151,5 +153,79 @@ func TestRepoStateClass(t *testing.T) {
 				t.Errorf("repoStateClass() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestBuildBatchViewStateCounts(t *testing.T) {
+	results := []batchRepoResult{
+		{RepoFullName: "o/clean", Result: &scanner.ScanResult{}},
+		{RepoFullName: "o/findings", Result: &scanner.ScanResult{Findings: []scanner.Finding{{Success: false, Severity: scanner.SeverityMedium}}}},
+		{RepoFullName: "o/high", Result: &scanner.ScanResult{Findings: []scanner.Finding{{Success: false, Severity: scanner.SeverityHigh}}}},
+		{RepoFullName: "o/err", Err: errors.New("api failure")},
+	}
+	view := buildBatchView(results)
+
+	want := map[string]int{
+		stateClassClean:        1,
+		stateClassFindings:     1,
+		stateClassHighFindings: 1,
+		stateClassError:        1,
+	}
+	for state, wantCount := range want {
+		if got := view.StateCounts[state]; got != wantCount {
+			t.Errorf("StateCounts[%q] = %d, want %d", state, got, wantCount)
+		}
+	}
+}
+
+func TestBatchHTMLFilterAttributes(t *testing.T) {
+	results := []batchRepoResult{
+		{RepoFullName: "o/clean", Result: &scanner.ScanResult{}},
+		{RepoFullName: "o/high", Result: &scanner.ScanResult{Findings: []scanner.Finding{{Success: false, Severity: scanner.SeverityHigh}}}},
+		{RepoFullName: "o/err", Err: errors.New("api failure")},
+	}
+	view := buildBatchView(results)
+	var buf bytes.Buffer
+	if err := renderHTMLTemplate(&buf, htmlBatchTemplate, view); err != nil {
+		t.Fatalf("renderHTMLTemplate() error: %v", err)
+	}
+	html := buf.String()
+
+	mustContain := []string{
+		// legend filter buttons (All must be first)
+		`data-filter="all"`,
+		`data-filter="clean"`,
+		`data-filter="findings"`,
+		`data-filter="high-findings"`,
+		`data-filter="error"`,
+		// sidebar links carry state
+		`data-state="clean"`,
+		`data-state="high-findings"`,
+		`data-state="error"`,
+		// main sections carry state
+		`class="repo-section" id="o-clean" data-state="clean"`,
+		`class="repo-section" id="o-high" data-state="high-findings"`,
+		// filter JS with All-aware logic and init call
+		`applyFilter`,
+		`filter-hidden`,
+		`applyFilter(active)`,
+	}
+	// "All" must appear before the first state filter
+	allIdx := strings.Index(html, `data-filter="all"`)
+	cleanIdx := strings.Index(html, `data-filter="clean"`)
+	if allIdx < 0 || cleanIdx < 0 || allIdx > cleanIdx {
+		t.Errorf("expected data-filter=\"all\" to appear before data-filter=\"clean\" in sidebar")
+	}
+	for _, want := range mustContain {
+		if !strings.Contains(html, want) {
+			t.Errorf("output missing %q", want)
+		}
+	}
+
+	// Summary section must be gone
+	for _, gone := range []string{"summary-section", "aggr-counts", "error-list"} {
+		if strings.Contains(html, gone) {
+			t.Errorf("output unexpectedly contains removed element %q", gone)
+		}
 	}
 }

@@ -110,18 +110,6 @@ func printRulesHTML() error {
 func renderHTMLTemplate(out io.Writer, text string, data any) error {
 	funcMap := template.FuncMap{
 		"upper": strings.ToUpper,
-		// sliceSeverities returns severity names in display order for range in templates.
-		"sliceSeverities": func() []string {
-			return []string{scanner.SeverityCritical, scanner.SeverityHigh, scanner.SeverityMedium, scanner.SeverityLow, scanner.SeverityInfo}
-		},
-		// sumCounts returns the total across all severity buckets.
-		"sumCounts": func(m map[string]int) int {
-			total := 0
-			for _, v := range m {
-				total += v
-			}
-			return total
-		},
 	}
 	tmpl, err := template.New("report").Funcs(funcMap).Parse(text)
 	if err != nil {
