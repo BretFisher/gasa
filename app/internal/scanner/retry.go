@@ -13,6 +13,14 @@ import (
 const (
 	defaultRetryMaxAttempts = 2
 	defaultRetryBaseDelay   = 250 * time.Millisecond
+
+	// defaultMaxInFlight caps how many requests this client has outstanding at
+	// once. Per-repo fan-out (concurrent collectors + workflow fetches) multiplied
+	// by batch-level repo concurrency can otherwise burst into GitHub's secondary
+	// (abuse) rate limit, which throttles clients that open too many simultaneous
+	// connections. Bounding it at the transport keeps every call path safe without
+	// each caller having to coordinate.
+	defaultMaxInFlight = 8
 )
 
 type retryTransport struct {
@@ -21,6 +29,9 @@ type retryTransport struct {
 	baseDelay   time.Duration
 	now         func() time.Time
 	sleep       func(context.Context, time.Duration) error
+	// sem bounds concurrent in-flight requests. A nil sem disables the limit
+	// (used by unit tests that drive RoundTrip directly).
+	sem chan struct{}
 }
 
 func newGitHubClient() *github.Client {
@@ -34,10 +45,23 @@ func newRetryTransport(base http.RoundTripper) *retryTransport {
 		baseDelay:   defaultRetryBaseDelay,
 		now:         time.Now,
 		sleep:       sleepWithContext,
+		sem:         make(chan struct{}, defaultMaxInFlight),
 	}
 }
 
 func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	// Acquire an in-flight slot for the whole request lifetime, including any
+	// retry backoff. Respect cancellation so a dead context doesn't block on a
+	// full semaphore.
+	if t.sem != nil {
+		select {
+		case t.sem <- struct{}{}:
+			defer func() { <-t.sem }()
+		case <-req.Context().Done():
+			return nil, req.Context().Err()
+		}
+	}
+
 	if !retryableMethod(req.Method) {
 		return t.base.RoundTrip(req)
 	}

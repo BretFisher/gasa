@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/google/go-github/v84/github"
@@ -165,40 +166,48 @@ func TestBlobURL_Escaping(t *testing.T) {
 
 func TestScanRepo_OnlyUsesGETRequests(t *testing.T) {
 	scanner, mux := newTestScanner(t, true)
+
+	// Collectors run concurrently, so guard the recorded methods slice.
+	var methodsMu sync.Mutex
 	methods := []string{}
+	record := func(m string) {
+		methodsMu.Lock()
+		methods = append(methods, m)
+		methodsMu.Unlock()
+	}
 
 	mux.HandleFunc("/repos/owner/repo", func(w http.ResponseWriter, r *http.Request) {
-		methods = append(methods, r.Method)
+		record(r.Method)
 		if err := json.NewEncoder(w).Encode(map[string]any{"full_name": "owner/repo", "default_branch": "main"}); err != nil {
 			t.Errorf("failed to encode response: %v", err)
 		}
 	})
 	mux.HandleFunc("/repos/owner/repo/contents/.github/workflows", func(w http.ResponseWriter, r *http.Request) {
-		methods = append(methods, r.Method)
+		record(r.Method)
 		w.WriteHeader(http.StatusNotFound)
 	})
 	mux.HandleFunc("/repos/owner/repo/contents/.github/dependabot.yml", func(w http.ResponseWriter, r *http.Request) {
-		methods = append(methods, r.Method)
+		record(r.Method)
 		w.WriteHeader(http.StatusNotFound)
 	})
 	mux.HandleFunc("/repos/owner/repo/contents/.github/dependabot.yaml", func(w http.ResponseWriter, r *http.Request) {
-		methods = append(methods, r.Method)
+		record(r.Method)
 		w.WriteHeader(http.StatusNotFound)
 	})
 	mux.HandleFunc("/repos/owner/repo/actions/permissions", func(w http.ResponseWriter, r *http.Request) {
-		methods = append(methods, r.Method)
+		record(r.Method)
 		if err := json.NewEncoder(w).Encode(map[string]any{"enabled": true, "allowed_actions": "selected"}); err != nil {
 			t.Errorf("failed to encode response: %v", err)
 		}
 	})
 	mux.HandleFunc("/repos/owner/repo/actions/permissions/workflow", func(w http.ResponseWriter, r *http.Request) {
-		methods = append(methods, r.Method)
+		record(r.Method)
 		if err := json.NewEncoder(w).Encode(map[string]any{"default_workflow_permissions": "read", "can_approve_pull_request_reviews": false}); err != nil {
 			t.Errorf("failed to encode response: %v", err)
 		}
 	})
 	mux.HandleFunc("/repos/owner/repo/actions/permissions/fork-pr-contributor-approval", func(w http.ResponseWriter, r *http.Request) {
-		methods = append(methods, r.Method)
+		record(r.Method)
 		if err := json.NewEncoder(w).Encode(map[string]any{"approval_policy": "all_external_contributors"}); err != nil {
 			t.Errorf("failed to encode response: %v", err)
 		}
@@ -342,15 +351,13 @@ func TestScanRepoWithOptions_DebugLogReceivesMessages(t *testing.T) {
 		"/repos/owner/repo/contents/.renovaterc.json5",
 	)
 
-	var lines []string
-	dbg := func(repo, msg string) {
-		lines = append(lines, repo+"|"+msg)
-	}
+	rec := &debugRecorder{}
 
-	_, err := scanner.ScanRepoWithOptions(context.Background(), "owner", "repo", ScanOptions{DebugLog: dbg})
+	_, err := scanner.ScanRepoWithOptions(context.Background(), "owner", "repo", ScanOptions{DebugLog: rec.log})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	lines := rec.snapshot()
 	if len(lines) == 0 {
 		t.Fatal("expected debug lines, got none")
 	}

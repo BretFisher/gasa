@@ -9,8 +9,20 @@ import (
 	"strings"
 
 	"github.com/google/go-github/v84/github"
+	"golang.org/x/sync/errgroup"
 	"gopkg.in/yaml.v3"
 )
+
+// workflowFetchConcurrency bounds how many workflow files are fetched in
+// parallel for a single repository. The global transport semaphore caps total
+// in-flight requests across all repos; this just keeps any one repo from
+// monopolizing those slots.
+const workflowFetchConcurrency = 6
+
+// usesRegex matches a `uses: owner/action@ref` step, capturing the action name
+// and ref. Compiled once at package scope because findUnpinnedActions is called
+// per workflow file.
+var usesRegex = regexp.MustCompile(`(?m)^\s*-?\s*uses:\s*['"]?([^'"@\s]+)@([^'"@\s]+)['"]?`)
 
 // WorkflowFile represents a parsed GitHub Actions workflow
 type WorkflowFile struct {
@@ -40,7 +52,6 @@ type WorkflowStep struct {
 }
 
 func (c *factCollector) collectWorkflowFacts(ctx context.Context, owner, repo string, dbg DebugLogger) []WorkflowFact {
-	var workflows []WorkflowFact
 	repoFull := owner + "/" + repo
 
 	// Get .github/workflows directory contents
@@ -54,23 +65,49 @@ func (c *factCollector) collectWorkflowFacts(ctx context.Context, owner, repo st
 		if dbg != nil {
 			dbg(repoFull, "workflows dir not found or inaccessible: "+err.Error())
 		}
-		return workflows
+		return nil
 	}
 	if dbg != nil {
 		dbg(repoFull, fmt.Sprintf("workflows dir: found %d entries", len(dirContent)))
 	}
 
+	// Collect candidate workflow files first, then fetch their contents
+	// concurrently. Results are written to a pre-sized slice by index so the
+	// returned order matches the directory listing regardless of completion order.
+	files := make([]*github.RepositoryContent, 0, len(dirContent))
 	for _, file := range dirContent {
-		if file.Name == nil || !strings.HasSuffix(*file.Name, ".yml") && !strings.HasSuffix(*file.Name, ".yaml") {
+		if file.Name == nil || (!strings.HasSuffix(*file.Name, ".yml") && !strings.HasSuffix(*file.Name, ".yaml")) {
 			continue
 		}
-		fact, ok := parseAndAddWorkflowFile(ctx, file, c, owner, repo, repoFull, dbg)
-		if !ok {
-			continue
-		}
-		workflows = append(workflows, fact)
+		files = append(files, file)
 	}
 
+	facts := make([]WorkflowFact, len(files))
+	ok := make([]bool, len(files))
+
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(workflowFetchConcurrency)
+	for i, file := range files {
+		idx, f := i, file
+		g.Go(func() error {
+			fact, good := parseAndAddWorkflowFile(gctx, f, c, owner, repo, repoFull, dbg)
+			if good {
+				facts[idx] = fact
+				ok[idx] = true
+			}
+			return nil
+		})
+	}
+	// Workers never return an error; per-file failures are recorded via ok[idx],
+	// so the group only bounds concurrency.
+	g.Wait() //nolint:errcheck // workers always return nil; failures recorded per-file
+
+	var workflows []WorkflowFact
+	for i := range facts {
+		if ok[i] {
+			workflows = append(workflows, facts[i])
+		}
+	}
 	return workflows
 }
 
@@ -203,7 +240,6 @@ func findUnpinnedActions(content string) []ActionRef {
 	var unpinned []ActionRef
 
 	// Match uses: statements
-	usesRegex := regexp.MustCompile(`(?m)^\s*-?\s*uses:\s*['"]?([^'"@\s]+)@([^'"@\s]+)['"]?`)
 	lines := strings.Split(content, "\n")
 
 	for lineNum, line := range lines {

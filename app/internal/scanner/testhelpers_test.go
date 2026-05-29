@@ -7,12 +7,35 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/google/go-github/v84/github"
 )
 
 const testBaseURLPath = "/api-v3"
+
+// debugRecorder is a concurrency-safe DebugLogger sink for tests. Fact
+// collection runs collectors (and workflow-file fetches) concurrently, so the
+// logger may be invoked from multiple goroutines at once.
+type debugRecorder struct {
+	mu    sync.Mutex
+	lines []string
+}
+
+// log satisfies the scanner.DebugLogger signature.
+func (d *debugRecorder) log(repo, msg string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.lines = append(d.lines, repo+"|"+msg)
+}
+
+// snapshot returns a copy of the recorded lines safe to read after collection.
+func (d *debugRecorder) snapshot() []string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return append([]string(nil), d.lines...)
+}
 
 func newTestScanner(t *testing.T, authenticated bool) (*Scanner, *http.ServeMux) {
 	t.Helper()

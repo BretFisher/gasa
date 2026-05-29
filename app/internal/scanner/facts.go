@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"context"
+	"sync"
 
 	"github.com/google/go-github/v84/github"
 )
@@ -68,11 +69,35 @@ func (c *factCollector) collectFacts(ctx context.Context, owner, repo string, re
 		facts.DefaultBranch = *repository.DefaultBranch
 	}
 
-	facts.Workflows = c.collectWorkflowFacts(ctx, owner, repo, dbg)
-	facts.ActionsSettings = c.collectActionsSettingsFacts(ctx, owner, repo, dbg)
-	hasWorkflows := len(facts.Workflows) > 0
-	facts.Dependabot = c.collectDependabotFacts(ctx, owner, repo, hasWorkflows, dbg)
-	facts.Renovate = c.collectRenovateFacts(ctx, owner, repo, hasWorkflows, dbg)
+	// The four collectors hit independent GitHub endpoints, so run them
+	// concurrently. Each goroutine writes only its own local, read back after
+	// Wait, so there are no shared writes. HasWorkflows isn't needed to fetch the
+	// update-tool configs (only to interpret them later), so it's stamped onto
+	// the results once the workflow listing is known. Total in-flight requests
+	// are bounded by the transport-level semaphore (see retry.go), which keeps
+	// per-repo fan-out from tripping GitHub's secondary rate limits under batch.
+	var (
+		wg         sync.WaitGroup
+		workflows  []WorkflowFact
+		settings   ActionsSettingsFacts
+		dependabot DependabotFacts
+		renovate   RenovateFacts
+	)
+	wg.Add(4)
+	go func() { defer wg.Done(); workflows = c.collectWorkflowFacts(ctx, owner, repo, dbg) }()
+	go func() { defer wg.Done(); settings = c.collectActionsSettingsFacts(ctx, owner, repo, dbg) }()
+	go func() { defer wg.Done(); dependabot = c.collectDependabotFacts(ctx, owner, repo, false, dbg) }()
+	go func() { defer wg.Done(); renovate = c.collectRenovateFacts(ctx, owner, repo, false, dbg) }()
+	wg.Wait()
+
+	hasWorkflows := len(workflows) > 0
+	dependabot.HasWorkflows = hasWorkflows
+	renovate.HasWorkflows = hasWorkflows
+
+	facts.Workflows = workflows
+	facts.ActionsSettings = settings
+	facts.Dependabot = dependabot
+	facts.Renovate = renovate
 
 	return facts
 }
