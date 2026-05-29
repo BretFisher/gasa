@@ -44,10 +44,10 @@ func repoAnchor(repoFull string) string {
 //	"clean"         — scan succeeded with zero findings
 func repoStateClass(r batchRepoResult) string {
 	if r.Err != nil {
-		return "error"
+		return stateClassError
 	}
 	if r.Result != nil && r.Result.Error != "" {
-		return "error"
+		return stateClassError
 	}
 	if r.Result != nil {
 		hasHighOrCritical := false
@@ -62,23 +62,23 @@ func repoStateClass(r batchRepoResult) string {
 			}
 		}
 		if hasHighOrCritical {
-			return "high-findings"
+			return stateClassHighFindings
 		}
 		if hasFindings {
-			return "findings"
+			return stateClassFindings
 		}
 	}
-	return "clean"
+	return stateClassClean
 }
 
 // buildBatchView converts raw batchRepoResults into the HTML view model.
 func buildBatchView(results []batchRepoResult) htmlBatchView {
 	aggrCounts := map[string]int{
-		"critical": 0,
-		"high":     0,
-		"medium":   0,
-		"low":      0,
-		"info":     0,
+		scanner.SeverityCritical: 0,
+		scanner.SeverityHigh:     0,
+		scanner.SeverityMedium:   0,
+		scanner.SeverityLow:      0,
+		scanner.SeverityInfo:     0,
 	}
 	errCount := 0
 	entries := make([]htmlBatchRepoEntry, 0, len(results))
@@ -90,24 +90,25 @@ func buildBatchView(results []batchRepoResult) htmlBatchView {
 			StateClass:   repoStateClass(r),
 		}
 
-		if r.Err != nil {
+		switch {
+		case r.Err != nil:
 			entry.HasError = true
 			entry.ErrorMsg = r.Err.Error()
 			errCount++
-		} else if r.Result != nil && r.Result.Error != "" {
+		case r.Result != nil && r.Result.Error != "":
 			entry.HasError = true
 			entry.ErrorMsg = r.Result.Error
 			errCount++
-		} else if r.Result != nil {
+		case r.Result != nil:
 			// Build finding views (same logic as single-repo printHTML)
 			for _, finding := range r.Result.Findings {
 				rows := []htmlFindingRow{
-					{Label: "Rule", Value: finding.Rule},
-					{Label: "Category", Value: finding.Category},
-					{Label: "Description", Value: finding.Description},
+					{Label: labelRule, Value: finding.Rule},
+					{Label: labelCategory, Value: finding.Category},
+					{Label: labelDescription, Value: finding.Description},
 				}
 				if !finding.Success {
-					rows = append(rows, htmlFindingRow{Label: "Fix", Value: finding.Remediation})
+					rows = append(rows, htmlFindingRow{Label: labelFix, Value: finding.Remediation})
 				}
 				entry.Findings = append(entry.Findings, htmlFindingView{
 					Title:         finding.Title,

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/go-github/v84/github"
 	"github.com/tailscale/hujson"
 	"gopkg.in/yaml.v3"
 )
@@ -66,7 +67,7 @@ type RenovatePackageRule struct {
 var renovateConfigPaths = []string{
 	"renovate.json",
 	"renovate.json5",
-	".github/renovate.json",
+	defaultRenovatePath,
 	".github/renovate.json5",
 	".gitlab/renovate.json",
 	".gitlab/renovate.json5",
@@ -95,14 +96,14 @@ func parseRenovateConfig(content string) (*RenovateConfig, error) {
 func (c *factCollector) collectDependabotFacts(ctx context.Context, owner, repo string, hasWorkflows bool, dbg DebugLogger) DependabotFacts {
 	repoFull := owner + "/" + repo
 	facts := DependabotFacts{
-		Path:         ".github/dependabot.yml",
+		Path:         defaultDependabotPath,
 		HasWorkflows: hasWorkflows,
 	}
 
 	if dbg != nil {
-		dbg(repoFull, "GET /repos/"+repoFull+"/contents/.github/dependabot.yml")
+		dbg(repoFull, "GET /repos/"+repoFull+"/contents/"+defaultDependabotPath)
 	}
-	fileContent, _, _, err := c.client.Repositories.GetContents(ctx, owner, repo, ".github/dependabot.yml", nil)
+	fileContent, _, _, err := c.client.Repositories.GetContents(ctx, owner, repo, defaultDependabotPath, nil)
 	if err != nil {
 		if dbg != nil {
 			dbg(repoFull, "dependabot.yml not found — trying dependabot.yaml")
@@ -124,31 +125,37 @@ func (c *factCollector) collectDependabotFacts(ctx context.Context, owner, repo 
 			dbg(repoFull, "no dependabot config found — missing=true")
 		}
 	} else {
-		content, err := decodeContent(fileContent)
-		if err == nil {
-			facts.Content = content
-			var config DependabotConfig
-			if err := yaml.Unmarshal([]byte(content), &config); err != nil {
-				facts.Invalid = err
-				if dbg != nil {
-					dbg(repoFull, "dependabot config parse error: "+err.Error())
-				}
-			} else {
-				facts.Config = &config
-				coversActions := dependabotCoversActions(&config)
-				if dbg != nil {
-					dbg(repoFull, fmt.Sprintf("dependabot config parsed: %d update entries, covers-actions=%v", len(config.Updates), coversActions))
-				}
-				for _, u := range config.Updates {
-					if u.PackageEcosystem == packageEcosystemGitHubActions && dbg != nil {
-						dbg(repoFull, fmt.Sprintf("dependabot github-actions entry: cooldown=%v", u.Cooldown != nil))
-					}
-				}
-			}
-		}
+		parseDependabotContent(&facts, fileContent, dbg, repoFull)
 	}
 
 	return facts
+}
+
+// parseDependabotContent decodes and parses a Dependabot config file into facts.
+func parseDependabotContent(facts *DependabotFacts, fileContent *github.RepositoryContent, dbg DebugLogger, repoFull string) {
+	content, err := decodeContent(fileContent)
+	if err != nil {
+		return
+	}
+	facts.Content = content
+	var config DependabotConfig
+	if err := yaml.Unmarshal([]byte(content), &config); err != nil {
+		facts.Invalid = err
+		if dbg != nil {
+			dbg(repoFull, "dependabot config parse error: "+err.Error())
+		}
+		return
+	}
+	facts.Config = &config
+	coversActions := dependabotCoversActions(&config)
+	if dbg != nil {
+		dbg(repoFull, fmt.Sprintf("dependabot config parsed: %d update entries, covers-actions=%v", len(config.Updates), coversActions))
+	}
+	for _, u := range config.Updates {
+		if u.PackageEcosystem == packageEcosystemGitHubActions && dbg != nil {
+			dbg(repoFull, fmt.Sprintf("dependabot github-actions entry: cooldown=%v", u.Cooldown != nil))
+		}
+	}
 }
 
 func (c *factCollector) collectRenovateFacts(ctx context.Context, owner, repo string, hasWorkflows bool, dbg DebugLogger) RenovateFacts {
@@ -214,8 +221,6 @@ func (c *factCollector) collectRenovateFacts(ctx context.Context, owner, repo st
 // ---------------------------------------------------------------------------
 
 func evaluateUpdateToolConfigurationFacts(facts *ScanFacts) []Finding {
-	var findings []Finding
-
 	dep := facts.Dependabot
 	ren := facts.Renovate
 
@@ -224,28 +229,43 @@ func evaluateUpdateToolConfigurationFacts(facts *ScanFacts) []Finding {
 		return nil
 	}
 
-	hasWorkflows := dep.HasWorkflows // both facts carry the same value
-
 	depOK := !dep.Missing && dep.Invalid == nil && dep.Config != nil
 	renOK := !ren.Missing && ren.Invalid == nil && ren.Config != nil
 
 	// --- neither tool is configured ---
 	if dep.Missing && ren.Missing {
-		return append(findings, Finding{
+		return []Finding{{
 			ID:          findingIDNoUpdateTool,
 			Severity:    SeverityMedium,
 			Title:       "No dependency update tool configured",
 			Description: "This repository has neither a Dependabot configuration file nor a Renovate configuration file. Automated dependency update tooling keeps action versions and package dependencies current and helps catch vulnerable or malicious releases.",
-			File:        ".github/dependabot.yml",
+			File:        defaultDependabotPath,
 			Remediation: "Add a `.github/dependabot.yml` (Dependabot) or a `renovate.json` / `.github/renovate.json` (Renovate) to enable automated dependency updates.",
 			DocURL:      "https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuring-dependabot-version-updates",
-		})
+		}}
 	}
 
 	// --- invalid configs (only report if the other tool is not valid) ---
+	if findings := collectInvalidConfigFindings(dep, ren, depOK, renOK); len(findings) > 0 {
+		return findings
+	}
+
+	// If neither config is valid at this point, nothing more to check.
+	if !depOK && !renOK {
+		return nil
+	}
+
+	// --- github-actions coverage check ---
+	return checkActionsCoverage(dep, ren, depOK, renOK)
+}
+
+// collectInvalidConfigFindings reports parse errors for Dependabot and/or Renovate,
+// but only when the sibling tool is also not valid (to avoid double-reporting).
+func collectInvalidConfigFindings(dep DependabotFacts, ren RenovateFacts, depOK, renOK bool) []Finding {
+	var findings []Finding
 	if dep.Invalid != nil && !renOK {
 		findings = append(findings, Finding{
-			ID:          "invalid-dependabot",
+			ID:          findingIDInvalidDependabot,
 			Severity:    SeverityMedium,
 			Title:       "Invalid Dependabot configuration",
 			Description: fmt.Sprintf("The dependabot configuration file could not be parsed: %v", dep.Invalid),
@@ -254,7 +274,6 @@ func evaluateUpdateToolConfigurationFacts(facts *ScanFacts) []Finding {
 			DocURL:      "https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file",
 		})
 	}
-
 	if ren.Invalid != nil && !depOK {
 		findings = append(findings, Finding{
 			ID:          "invalid-renovate",
@@ -266,59 +285,55 @@ func evaluateUpdateToolConfigurationFacts(facts *ScanFacts) []Finding {
 			DocURL:      "https://docs.renovatebot.com/configuration-options/",
 		})
 	}
+	return findings
+}
 
-	// If we already have parse errors and no valid tool, stop here.
-	if len(findings) > 0 {
-		return findings
+// checkActionsCoverage checks whether at least one valid update tool covers the
+// github-actions ecosystem. Returns an empty slice (nil) if workflows are absent
+// or if coverage is already provided.
+func checkActionsCoverage(dep DependabotFacts, ren RenovateFacts, depOK, renOK bool) []Finding {
+	if !dep.HasWorkflows {
+		return nil
 	}
-
-	// If neither config is valid at this point, nothing more to check.
-	if !depOK && !renOK {
-		return findings
-	}
-
-	// --- github-actions coverage check ---
-	if !hasWorkflows {
-		return findings
-	}
-
 	depCoversActions := depOK && dependabotCoversActions(dep.Config)
 	renCoversActions := renOK && renovateCoversActions(ren.Config)
-
 	if !depCoversActions && !renCoversActions {
-		// Build a tool-aware remediation message
-		var toolNames []string
-		if depOK {
-			toolNames = append(toolNames, "Dependabot")
-		}
-		if renOK {
-			toolNames = append(toolNames, "Renovate")
-		}
-		toolDesc := strings.Join(toolNames, " and ")
-		if toolDesc == "" {
-			toolDesc = "your update tool"
-		}
+		return []Finding{buildMissingActionsFinding(dep, ren, depOK, renOK)}
+	}
+	return nil
+}
 
-		findings = append(findings, Finding{
-			ID:          "update-tool-missing-actions",
-			Severity:    SeverityMedium,
-			Title:       "Update tool not configured for GitHub Actions",
-			Description: fmt.Sprintf("This repository has GitHub Actions workflows but %s is not configured to update them. Action versions will not be automatically kept up to date.", toolDesc),
-			File:        updateToolFilePath(dep, ren),
-			Remediation: "Configure your update tool to track the github-actions ecosystem.\n\n" +
-				"Dependabot (.github/dependabot.yml):\n" +
-				"  - package-ecosystem: \"github-actions\"\n" +
-				"    directory: \"/\"\n" +
-				"    schedule:\n" +
-				"      interval: \"weekly\"\n\n" +
-				"Renovate (renovate.json / .github/renovate.json):\n" +
-				"  { \"enabledManagers\": [\"github-actions\"] }\n" +
-				"  (or omit enabledManagers entirely — Renovate auto-detects github-actions)",
-			DocURL: "https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file#package-ecosystem",
-		})
+// buildMissingActionsFinding constructs the finding for when no update tool covers GitHub Actions.
+func buildMissingActionsFinding(dep DependabotFacts, ren RenovateFacts, depOK, renOK bool) Finding {
+	var toolNames []string
+	if depOK {
+		toolNames = append(toolNames, "Dependabot")
+	}
+	if renOK {
+		toolNames = append(toolNames, "Renovate")
+	}
+	toolDesc := strings.Join(toolNames, " and ")
+	if toolDesc == "" {
+		toolDesc = "your update tool"
 	}
 
-	return findings
+	return Finding{
+		ID:          findingIDMissingActionsUpdateTool,
+		Severity:    SeverityMedium,
+		Title:       "Update tool not configured for GitHub Actions",
+		Description: fmt.Sprintf("This repository has GitHub Actions workflows but %s is not configured to update them. Action versions will not be automatically kept up to date.", toolDesc),
+		File:        updateToolFilePath(dep, ren),
+		Remediation: "Configure your update tool to track the github-actions ecosystem.\n\n" +
+			"Dependabot (.github/dependabot.yml):\n" +
+			"  - package-ecosystem: \"github-actions\"\n" +
+			"    directory: \"/\"\n" +
+			"    schedule:\n" +
+			"      interval: \"weekly\"\n\n" +
+			"Renovate (renovate.json / .github/renovate.json):\n" +
+			"  { \"enabledManagers\": [\"github-actions\"] }\n" +
+			"  (or omit enabledManagers entirely — Renovate auto-detects github-actions)",
+		DocURL: "https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file#package-ecosystem",
+	}
 }
 
 // dependabotCoversActions returns true when the Dependabot config has a
@@ -381,7 +396,7 @@ func evaluateUpdateToolActionsCooldownFacts(facts *ScanFacts) []Finding {
 	}
 
 	return []Finding{{
-		ID:          "update-tool-actions-missing-cooldown",
+		ID:          findingIDMissingActionsCooldown,
 		Severity:    SeverityLow,
 		Title:       "Update tool does not set a cooldown for GitHub Actions updates",
 		Description: "Neither Dependabot nor Renovate is configured with a cooldown delay for GitHub Actions updates. A cooldown gives the community time to detect supply-chain attacks before a new action version is automatically adopted.",
@@ -494,5 +509,5 @@ func updateToolFilePath(dep DependabotFacts, ren RenovateFacts) string {
 	if !ren.Missing && ren.Path != "" {
 		return ren.Path
 	}
-	return ".github/dependabot.yml"
+	return defaultDependabotPath
 }

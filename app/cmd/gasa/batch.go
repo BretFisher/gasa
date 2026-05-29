@@ -166,32 +166,9 @@ func runBatch(cmd *cobra.Command, args []string) error {
 	}
 
 	// Build repo list
-	var repos []string
-	if req.InputPath != "" {
-		repos, err = repoListFromFile(req.InputPath)
-		if err != nil {
-			return fmt.Errorf("reading --input file: %w", err)
-		}
-	} else {
-		arg := req.Target
-		if strings.Contains(arg, "/") {
-			// Explicit owner/repo list (comma-separated)
-			repos, err = parseRepoList(arg)
-			if err != nil {
-				return err
-			}
-		} else {
-			// Owner/user name — fetch all repos via API
-			if resolvedToken == "" {
-				fmt.Fprintln(os.Stderr, "Warning: unauthenticated — repo listing is limited to 60 req/hr and may be incomplete")
-			}
-			listCtx, cancel := context.WithTimeout(ctx, req.Timeout)
-			repos, err = fetchRepoList(listCtx, s.GitHubClient(), arg, req.IncludeArchived)
-			cancel()
-			if err != nil {
-				return fmt.Errorf("fetching repo list for %q: %w", arg, err)
-			}
-		}
+	repos, err := resolveRepoList(ctx, s, req, resolvedToken)
+	if err != nil {
+		return err
 	}
 
 	if len(repos) == 0 {
@@ -304,8 +281,8 @@ func runBatchScans(ctx context.Context, repos []string, s *scanner.Scanner, cfg 
 	g, groupCtx := errgroup.WithContext(ctx)
 	g.SetLimit(concurrency)
 
-	for i, repoFull := range repos {
-		idx, repoFull := i, repoFull
+	for i, repoURL := range repos {
+		idx, repoFull := i, repoURL
 		g.Go(func() error {
 			owner, repo, err := scanner.ParseRepoURL(repoFull)
 			if err != nil {
@@ -341,11 +318,12 @@ func runBatchScans(ctx context.Context, repos []string, s *scanner.Scanner, cfg 
 
 			progressMu.Lock()
 			completed++
-			if scanErr != nil {
+			switch {
+			case scanErr != nil:
 				fmt.Fprintf(os.Stderr, "[%d/%d] %s — error: %v\n", completed, total, repoFull, scanErr)
-			} else if result.Error != "" {
+			case result.Error != "":
 				fmt.Fprintf(os.Stderr, "[%d/%d] %s — %s\n", completed, total, repoFull, result.Error)
-			} else {
+			default:
 				counts := result.CountBySeverity()
 				numFindings := 0
 				for _, c := range counts {
@@ -380,11 +358,41 @@ func runBatchScans(ctx context.Context, repos []string, s *scanner.Scanner, cfg 
 	return results
 }
 
+// resolveRepoList builds the list of owner/repo strings to scan from the three
+// supported input modes: explicit file (--input), comma-separated list, or owner fetch.
+func resolveRepoList(ctx context.Context, s *scanner.Scanner, req batchRequest, resolvedToken string) ([]string, error) {
+	if req.InputPath != "" {
+		repos, err := repoListFromFile(req.InputPath)
+		if err != nil {
+			return nil, fmt.Errorf("reading --input file: %w", err)
+		}
+		return repos, nil
+	}
+
+	arg := req.Target
+	if strings.Contains(arg, "/") {
+		// Explicit owner/repo list (comma-separated)
+		return parseRepoList(arg)
+	}
+
+	// Owner/user name — fetch all repos via API
+	if resolvedToken == "" {
+		fmt.Fprintln(os.Stderr, "Warning: unauthenticated — repo listing is limited to 60 req/hr and may be incomplete")
+	}
+	listCtx, cancel := context.WithTimeout(ctx, req.Timeout)
+	repos, err := fetchRepoList(listCtx, s.GitHubClient(), arg, req.IncludeArchived)
+	cancel()
+	if err != nil {
+		return nil, fmt.Errorf("fetching repo list for %q: %w", arg, err)
+	}
+	return repos, nil
+}
+
 // fetchRepoList returns all non-archived (or all if includeArchived) repos
 // for the given user or org sorted by most recent push, using pagination.
 func fetchRepoList(ctx context.Context, client *github.Client, owner string, includeArchived bool) ([]string, error) {
 	user, _, err := client.Users.Get(ctx, owner)
-	if err == nil && user.GetType() == "Organization" {
+	if err == nil && user.GetType() == githubAccountTypeOrg {
 		return fetchOrgRepoList(ctx, client, owner, includeArchived)
 	}
 	return fetchUserRepoList(ctx, client, owner, includeArchived)

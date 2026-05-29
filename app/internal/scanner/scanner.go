@@ -16,6 +16,56 @@ import (
 const (
 	rateLimitMsg          = "API rate limit exceeded. Try again later."
 	findingIDNoUpdateTool = "no-update-tool"
+
+	// Rule categories
+	categoryWorkflows = "Workflows"
+	categorySettings  = "Settings"
+	categoryUpdates   = "Updates"
+
+	// Rule names
+	ruleNamePullRequestTarget          = "workflows/pull-request-target"
+	ruleNameActionVersionPinning       = "workflows/action-version-pinning"
+	ruleNameWorkflowPermissions        = "workflows/workflow-permissions"
+	ruleNameAllowedActionsPolicy       = "actions/permissions/allowed-actions-policy"
+	ruleNameDefaultWorkflowPermissions = "actions/permissions/workflow/default-workflow-permissions"
+	ruleNameActionsCanApprovePRs       = "actions/permissions/workflow/actions-can-approve-prs"
+	ruleNameForkPRContributorApproval  = "actions/permissions/fork-pr-contributor-approval"
+	ruleNameUpdateToolConfiguration    = "updates/update-tool-configuration"
+	ruleNameUpdateToolActionsCooldown  = "updates/update-tool-actions-cooldown"
+	ruleNameUpdateToolActionsPinning   = "updates/update-tool-actions-pinning"
+
+	// Finding IDs
+	findingIDSettingsCheckFailed      = "settings-check-failed"
+	findingIDSettingsCheckUnavailable = "settings-check-unavailable"
+	findingIDInvalidDependabot        = "invalid-dependabot"
+	findingIDMissingActionsUpdateTool = "update-tool-missing-actions"
+	findingIDMissingActionsCooldown   = "update-tool-actions-missing-cooldown"
+
+	// File paths
+	defaultDependabotPath = ".github/dependabot.yml"
+	defaultRenovatePath   = ".github/renovate.json"
+
+	// Trigger events
+	triggerPullRequestTarget = "pull_request_target"
+
+	// Doc URLs
+	docURLActionsSettings = "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository"
+
+	// Additional finding IDs used in rules and buildFixURL
+	findingIDAllActionsAllowed       = "settings-all-actions-allowed"
+	findingIDDefaultPermissionsWrite = "settings-default-permissions-write"
+	findingIDActionsCanApprovePRs    = "settings-actions-can-approve-prs"
+	findingIDForkPRTooPermissive     = "settings-fork-pr-contributor-approval-too-permissive"
+
+	// GitHub Actions permission values
+	actionsAllowedAll         = "all"
+	actionsAllowedSelected    = "selected"
+	permissionsRead           = "read"
+	permissionsWrite          = "write"
+	forkPRApprovalAllExternal = "all_external_contributors"
+
+	// Error messages
+	errMsgRepoNotFound = "Repository not found or is private"
 )
 
 // Scanner performs security checks on GitHub repositories
@@ -161,7 +211,7 @@ func classifyGitHubRepoAccessError(err error) string {
 
 		switch statusCode {
 		case http.StatusNotFound:
-			return "Repository not found or is private"
+			return errMsgRepoNotFound
 		case http.StatusUnauthorized:
 			return "Authentication failed (token rejected)"
 		case http.StatusForbidden:
@@ -193,18 +243,18 @@ func buildFixURL(f Finding, owner, repo, defaultBranch string) string {
 	settingsURL := repoURL + "/settings/actions"
 
 	switch f.ID {
-	case "settings-all-actions-allowed", "settings-local-only", "settings-check-failed", "settings-check-unavailable":
+	case findingIDAllActionsAllowed, "settings-local-only", findingIDSettingsCheckFailed, findingIDSettingsCheckUnavailable:
 		return settingsURL
-	case "settings-default-permissions-write", "settings-actions-can-approve-prs":
+	case findingIDDefaultPermissionsWrite, findingIDActionsCanApprovePRs:
 		return settingsURL
-	case "settings-fork-pr-contributor-approval-too-permissive":
+	case findingIDForkPRTooPermissive:
 		return settingsURL
 	case findingIDNoUpdateTool:
-		return fmt.Sprintf("%s/new/%s?filename=%s", repoURL, pathEscapeSegments(defaultBranch), url.QueryEscape(".github/dependabot.yml"))
-	case "invalid-dependabot", "update-tool-missing-actions":
-		return blobURL(owner, repo, defaultBranch, ".github/dependabot.yml", 0)
+		return fmt.Sprintf("%s/new/%s?filename=%s", repoURL, pathEscapeSegments(defaultBranch), url.QueryEscape(defaultDependabotPath))
+	case findingIDInvalidDependabot, findingIDMissingActionsUpdateTool:
+		return blobURL(owner, repo, defaultBranch, defaultDependabotPath, 0)
 	case "invalid-renovate":
-		return blobURL(owner, repo, defaultBranch, ".github/renovate.json", 0)
+		return blobURL(owner, repo, defaultBranch, defaultRenovatePath, 0)
 	}
 
 	if f.File != "" {

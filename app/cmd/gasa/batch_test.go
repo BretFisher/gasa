@@ -103,13 +103,17 @@ func TestFetchRepoList_UsesOrgEndpointForOrganizations(t *testing.T) {
 	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/users/acme":
-			_ = json.NewEncoder(w).Encode(map[string]any{"type": "Organization"})
+			if err := json.NewEncoder(w).Encode(map[string]any{"type": "Organization"}); err != nil {
+				t.Errorf("encode response: %v", err)
+			}
 		case "/orgs/acme/repos":
 			sawOrgRepos = true
 			if got := r.URL.Query().Get("type"); got != "all" {
 				t.Fatalf("org repos type query = %q, want all", got)
 			}
-			_ = json.NewEncoder(w).Encode([]map[string]any{{"full_name": "acme/repo", "archived": false}})
+			if err := json.NewEncoder(w).Encode([]map[string]any{{"full_name": "acme/repo", "archived": false}}); err != nil {
+				t.Errorf("encode response: %v", err)
+			}
 		default:
 			t.Fatalf("unexpected request path %s", r.URL.Path)
 		}
@@ -132,10 +136,14 @@ func TestFetchRepoList_UsesUserEndpointForUsers(t *testing.T) {
 	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/users/bret":
-			_ = json.NewEncoder(w).Encode(map[string]any{"type": "User"})
+			if err := json.NewEncoder(w).Encode(map[string]any{"type": "User"}); err != nil {
+				t.Errorf("encode response: %v", err)
+			}
 		case "/users/bret/repos":
 			sawUserRepos = true
-			_ = json.NewEncoder(w).Encode([]map[string]any{{"full_name": "bret/repo", "archived": false}})
+			if err := json.NewEncoder(w).Encode([]map[string]any{{"full_name": "bret/repo", "archived": false}}); err != nil {
+				t.Errorf("encode response: %v", err)
+			}
 		default:
 			t.Fatalf("unexpected request path %s", r.URL.Path)
 		}
@@ -157,12 +165,16 @@ func TestFetchRepoList_FiltersArchivedRepos(t *testing.T) {
 	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/users/acme":
-			_ = json.NewEncoder(w).Encode(map[string]any{"type": "Organization"})
+			if err := json.NewEncoder(w).Encode(map[string]any{"type": "Organization"}); err != nil {
+				t.Errorf("encode response: %v", err)
+			}
 		case "/orgs/acme/repos":
-			_ = json.NewEncoder(w).Encode([]map[string]any{
+			if err := json.NewEncoder(w).Encode([]map[string]any{
 				{"full_name": "acme/active", "archived": false},
 				{"full_name": "acme/archived", "archived": true},
-			})
+			}); err != nil {
+				t.Errorf("encode response: %v", err)
+			}
 		default:
 			t.Fatalf("unexpected request path %s", r.URL.Path)
 		}

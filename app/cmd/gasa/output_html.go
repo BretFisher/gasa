@@ -58,12 +58,12 @@ func printHTML(result *scanner.ScanResult) error {
 
 	for _, finding := range result.Findings {
 		rows := []htmlFindingRow{
-			{Label: "Rule", Value: finding.Rule},
-			{Label: "Category", Value: finding.Category},
-			{Label: "Description", Value: finding.Description},
+			{Label: labelRule, Value: finding.Rule},
+			{Label: labelCategory, Value: finding.Category},
+			{Label: labelDescription, Value: finding.Description},
 		}
 		if !finding.Success {
-			rows = append(rows, htmlFindingRow{Label: "Fix", Value: finding.Remediation})
+			rows = append(rows, htmlFindingRow{Label: labelFix, Value: finding.Remediation})
 		}
 
 		view.Findings = append(view.Findings, htmlFindingView{
@@ -112,7 +112,7 @@ func renderHTMLTemplate(out io.Writer, text string, data any) error {
 		"upper": strings.ToUpper,
 		// sliceSeverities returns severity names in display order for range in templates.
 		"sliceSeverities": func() []string {
-			return []string{"critical", "high", "medium", "low", "info"}
+			return []string{scanner.SeverityCritical, scanner.SeverityHigh, scanner.SeverityMedium, scanner.SeverityLow, scanner.SeverityInfo}
 		},
 		// sumCounts returns the total across all severity buckets.
 		"sumCounts": func(m map[string]int) int {
@@ -139,22 +139,22 @@ func severityClass(f scanner.Finding) string {
 	}
 	switch f.Severity {
 	case scanner.SeverityCritical:
-		return "critical"
+		return scanner.SeverityCritical
 	case scanner.SeverityHigh:
-		return "high"
+		return scanner.SeverityHigh
 	case scanner.SeverityMedium:
-		return "medium"
+		return scanner.SeverityMedium
 	case scanner.SeverityLow:
-		return "low"
+		return scanner.SeverityLow
 	default:
-		return "info"
+		return scanner.SeverityInfo
 	}
 }
 
 func formatSeverityCounts(result *scanner.ScanResult) []string {
 	counts := result.CountBySeverity()
 	parts := []string{}
-	for _, severity := range []string{"critical", "high", "medium", "low", "info"} {
+	for _, severity := range []string{scanner.SeverityCritical, scanner.SeverityHigh, scanner.SeverityMedium, scanner.SeverityLow, scanner.SeverityInfo} {
 		if c := counts[severity]; c > 0 {
 			parts = append(parts, fmt.Sprintf("%d %s", c, severity))
 		}

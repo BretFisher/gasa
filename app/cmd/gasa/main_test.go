@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -353,14 +354,8 @@ func TestBuildScanRequest(t *testing.T) {
 			if err != nil {
 				t.Fatalf("buildScanRequest() error = %v", err)
 			}
-			if got.Owner != tt.want.Owner || got.Repo != tt.want.Repo || got.Format != tt.want.Format || got.Timeout != tt.want.Timeout || got.ConfigPath != tt.want.ConfigPath {
+			if !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("buildScanRequest() = %+v, want %+v", got, tt.want)
-			}
-			if !got.IncludeSuccess || !got.Debug || !got.TokenStdin {
-				t.Fatalf("buildScanRequest() did not preserve boolean options: %+v", got)
-			}
-			if strings.Join(got.Rules, ",") != strings.Join(tt.want.Rules, ",") || strings.Join(got.Categories, ",") != strings.Join(tt.want.Categories, ",") || strings.Join(got.Severities, ",") != strings.Join(tt.want.Severities, ",") {
-				t.Fatalf("buildScanRequest() did not preserve filters: %+v", got)
 			}
 		})
 	}

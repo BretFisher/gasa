@@ -86,7 +86,7 @@ var rulesCmd = &cobra.Command{
 	Use:   "rules",
 	Short: "List available rule names and aliases",
 	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, _ []string) error {
 		if err := validateOutputFormat(flagFormat); err != nil {
 			return err
 		}
@@ -106,7 +106,7 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the gasa version",
 	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		_, err := fmt.Fprintln(cmd.OutOrStdout(), Version)
 		return err
 	},
@@ -133,11 +133,12 @@ func init() {
 
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
 
 	if err := rootCmd.ExecuteContext(ctx); err != nil {
+		cancel()
 		os.Exit(1)
 	}
+	cancel()
 }
 
 func runScan(cmd *cobra.Command, args []string) error {
@@ -185,29 +186,7 @@ func runScan(cmd *cobra.Command, args []string) error {
 	}
 
 	if req.Format == outputFormatTable {
-		fmt.Fprintf(os.Stderr, "Scanning %s/%s...\n", req.Owner, req.Repo)
-		if len(req.Rules) > 0 {
-			fmt.Fprintf(os.Stderr, "Rules: %s\n", strings.Join(req.Rules, ", "))
-		}
-		if len(req.Categories) > 0 {
-			fmt.Fprintf(os.Stderr, "Categories: %s\n", strings.Join(req.Categories, ", "))
-		}
-		if len(req.Severities) > 0 {
-			fmt.Fprintf(os.Stderr, "Severities: %s\n", strings.Join(req.Severities, ", "))
-		}
-		if req.IncludeSuccess {
-			fmt.Fprintf(os.Stderr, "Include successes: yes\n")
-		}
-		if loadedConfigPath != "" {
-			fmt.Fprintf(os.Stderr, "Config: %s\n", loadedConfigPath)
-		}
-		if resolvedToken != "" {
-			fmt.Fprintf(os.Stderr, "Auth: %s\n", authSource)
-		} else {
-			fmt.Fprintf(os.Stderr, "Auth: unauthenticated (60 req/hr limit, some checks unavailable)\n")
-			fmt.Fprintf(os.Stderr, "  Tip: set GITHUB_TOKEN or install gh CLI for full scanning\n")
-		}
-		fmt.Fprintln(os.Stderr)
+		printScanHeader(req, loadedConfigPath, resolvedToken, authSource)
 	}
 
 	result, err := s.ScanRepoWithOptions(ctx, req.Owner, req.Repo, scanner.ScanOptions{
@@ -338,6 +317,33 @@ func buildDebugLogger(debug bool) scanner.DebugLogger {
 }
 
 const ghAuthTokenTimeout = 5 * time.Second
+
+// printScanHeader writes the pre-scan diagnostic header to stderr for table output.
+func printScanHeader(req scanRequest, loadedConfigPath, resolvedToken, authSource string) {
+	fmt.Fprintf(os.Stderr, "Scanning %s/%s...\n", req.Owner, req.Repo)
+	if len(req.Rules) > 0 {
+		fmt.Fprintf(os.Stderr, "Rules: %s\n", strings.Join(req.Rules, ", "))
+	}
+	if len(req.Categories) > 0 {
+		fmt.Fprintf(os.Stderr, "Categories: %s\n", strings.Join(req.Categories, ", "))
+	}
+	if len(req.Severities) > 0 {
+		fmt.Fprintf(os.Stderr, "Severities: %s\n", strings.Join(req.Severities, ", "))
+	}
+	if req.IncludeSuccess {
+		fmt.Fprintf(os.Stderr, "Include successes: yes\n")
+	}
+	if loadedConfigPath != "" {
+		fmt.Fprintf(os.Stderr, "Config: %s\n", loadedConfigPath)
+	}
+	if resolvedToken != "" {
+		fmt.Fprintf(os.Stderr, "Auth: %s\n", authSource)
+	} else {
+		fmt.Fprintf(os.Stderr, "Auth: unauthenticated (60 req/hr limit, some checks unavailable)\n")
+		fmt.Fprintf(os.Stderr, "  Tip: set GITHUB_TOKEN or install gh CLI for full scanning\n")
+	}
+	fmt.Fprintln(os.Stderr)
+}
 
 func resolveToken(ctx context.Context, tokenStdin bool, stdin io.Reader) (token, source string, err error) {
 	if tokenStdin {

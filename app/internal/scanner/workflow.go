@@ -64,64 +64,71 @@ func (c *factCollector) collectWorkflowFacts(ctx context.Context, owner, repo st
 		if file.Name == nil || !strings.HasSuffix(*file.Name, ".yml") && !strings.HasSuffix(*file.Name, ".yaml") {
 			continue
 		}
-
-		if dbg != nil {
-			dbg(repoFull, "GET /repos/"+repoFull+"/contents/"+*file.Path)
-		}
-		// Get file contents
-		fileContent, _, _, err := c.client.Repositories.GetContents(
-			ctx, owner, repo, *file.Path, nil,
-		)
-		if err != nil {
-			if dbg != nil {
-				dbg(repoFull, "workflow file fetch error "+*file.Path+": "+err.Error())
-			}
+		fact, ok := parseAndAddWorkflowFile(ctx, file, c, owner, repo, repoFull, dbg)
+		if !ok {
 			continue
 		}
-
-		content, err := decodeContent(fileContent)
-		if err != nil {
-			if dbg != nil {
-				dbg(repoFull, "workflow file decode error "+*file.Path+": "+err.Error())
-			}
-			continue
-		}
-
-		fact := WorkflowFact{
-			Path:    *file.Path,
-			Content: content,
-		}
-
-		var workflow WorkflowFile
-		if err := yaml.Unmarshal([]byte(content), &workflow); err == nil {
-			fact.Workflow = &workflow
-			fact.Valid = true
-			if dbg != nil {
-				dbg(repoFull, "workflow parsed OK: "+*file.Path)
-			}
-		} else if dbg != nil {
-			dbg(repoFull, "workflow parse error "+*file.Path+": "+err.Error())
-		}
-
 		workflows = append(workflows, fact)
 	}
 
 	return workflows
 }
 
+// parseAndAddWorkflowFile fetches a single workflow file, decodes it, and parses
+// the YAML. It returns the populated WorkflowFact and ok=true on success, or
+// ok=false if the file should be skipped (fetch or decode error).
+func parseAndAddWorkflowFile(ctx context.Context, file *github.RepositoryContent, c *factCollector, owner, repo, repoFull string, dbg DebugLogger) (WorkflowFact, bool) {
+	if dbg != nil {
+		dbg(repoFull, "GET /repos/"+repoFull+"/contents/"+*file.Path)
+	}
+	fileContent, _, _, err := c.client.Repositories.GetContents(ctx, owner, repo, *file.Path, nil)
+	if err != nil {
+		if dbg != nil {
+			dbg(repoFull, "workflow file fetch error "+*file.Path+": "+err.Error())
+		}
+		return WorkflowFact{}, false
+	}
+
+	content, err := decodeContent(fileContent)
+	if err != nil {
+		if dbg != nil {
+			dbg(repoFull, "workflow file decode error "+*file.Path+": "+err.Error())
+		}
+		return WorkflowFact{}, false
+	}
+
+	fact := WorkflowFact{
+		Path:    *file.Path,
+		Content: content,
+	}
+
+	var workflow WorkflowFile
+	if err := yaml.Unmarshal([]byte(content), &workflow); err == nil {
+		fact.Workflow = &workflow
+		fact.Valid = true
+		if dbg != nil {
+			dbg(repoFull, "workflow parsed OK: "+*file.Path)
+		}
+	} else if dbg != nil {
+		dbg(repoFull, "workflow parse error "+*file.Path+": "+err.Error())
+	}
+
+	return fact, true
+}
+
 // hasDangerousTrigger checks if the workflow uses pull_request_target
 func hasDangerousTrigger(on interface{}) bool {
 	switch v := on.(type) {
 	case string:
-		return v == "pull_request_target"
+		return v == triggerPullRequestTarget
 	case []interface{}:
 		for _, trigger := range v {
-			if str, ok := trigger.(string); ok && str == "pull_request_target" {
+			if str, ok := trigger.(string); ok && str == triggerPullRequestTarget {
 				return true
 			}
 		}
 	case map[string]interface{}:
-		_, exists := v["pull_request_target"]
+		_, exists := v[triggerPullRequestTarget]
 		return exists
 	}
 	return false

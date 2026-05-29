@@ -23,10 +23,10 @@ func availableRules() []rule {
 	return []rule{
 		{
 			RuleInfo: RuleInfo{
-				Name:        "workflows/pull-request-target",
+				Name:        ruleNamePullRequestTarget,
 				Aliases:     []string{"pull-request-target"},
 				Title:       "Pull Request Target",
-				Category:    "Workflows",
+				Category:    categoryWorkflows,
 				Severity:    SeverityCritical,
 				Description: "pull_request_target should not be used in public repos and is highly discouraged in private repos",
 			},
@@ -34,10 +34,10 @@ func availableRules() []rule {
 		},
 		{
 			RuleInfo: RuleInfo{
-				Name:        "workflows/action-version-pinning",
+				Name:        ruleNameActionVersionPinning,
 				Aliases:     []string{"action-version-pinning", "action-pinning", "pinning"},
 				Title:       "Action Version Pinning",
-				Category:    "Workflows",
+				Category:    categoryWorkflows,
 				Severity:    SeverityHigh,
 				Description: "actions referenced by tag or branch instead of a full commit SHA",
 			},
@@ -45,10 +45,10 @@ func availableRules() []rule {
 		},
 		{
 			RuleInfo: RuleInfo{
-				Name:        "workflows/workflow-permissions",
+				Name:        ruleNameWorkflowPermissions,
 				Aliases:     []string{"workflow-permissions", "permissions"},
 				Title:       "Workflow Permissions",
-				Category:    "Workflows",
+				Category:    categoryWorkflows,
 				Severity:    SeverityHigh,
 				Description: "workflows inherit broad default token permissions without explicit permissions blocks",
 			},
@@ -56,10 +56,10 @@ func availableRules() []rule {
 		},
 		{
 			RuleInfo: RuleInfo{
-				Name:        "actions/permissions/allowed-actions-policy",
+				Name:        ruleNameAllowedActionsPolicy,
 				Aliases:     []string{"allowed-actions-policy", "allowed-actions"},
 				Title:       "Allowed Actions Policy",
-				Category:    "Settings",
+				Category:    categorySettings,
 				Severity:    SeverityMedium,
 				Description: "repository allows all actions instead of restricting to trusted sources",
 			},
@@ -67,10 +67,10 @@ func availableRules() []rule {
 		},
 		{
 			RuleInfo: RuleInfo{
-				Name:        "actions/permissions/workflow/default-workflow-permissions",
+				Name:        ruleNameDefaultWorkflowPermissions,
 				Aliases:     []string{"default-workflow-permissions", "default-permissions"},
 				Title:       "Default Workflow Permissions",
-				Category:    "Settings",
+				Category:    categorySettings,
 				Severity:    SeverityHigh,
 				Description: "repository default GITHUB_TOKEN is read-write instead of read-only",
 			},
@@ -78,10 +78,10 @@ func availableRules() []rule {
 		},
 		{
 			RuleInfo: RuleInfo{
-				Name:        "actions/permissions/workflow/actions-can-approve-prs",
+				Name:        ruleNameActionsCanApprovePRs,
 				Aliases:     []string{"actions-can-approve-prs", "approve-prs"},
 				Title:       "Actions Can Approve PRs",
-				Category:    "Settings",
+				Category:    categorySettings,
 				Severity:    SeverityMedium,
 				Description: "workflows can create and approve pull request reviews",
 			},
@@ -89,10 +89,10 @@ func availableRules() []rule {
 		},
 		{
 			RuleInfo: RuleInfo{
-				Name:        "actions/permissions/fork-pr-contributor-approval",
+				Name:        ruleNameForkPRContributorApproval,
 				Aliases:     []string{"fork-pr-contributor-approval", "fork-pr-approval"},
 				Title:       "Fork PR Workflow Approval",
-				Category:    "Settings",
+				Category:    categorySettings,
 				Severity:    SeverityHigh,
 				Description: "external contributors can trigger fork PR workflows without maintainer approval",
 			},
@@ -100,10 +100,10 @@ func availableRules() []rule {
 		},
 		{
 			RuleInfo: RuleInfo{
-				Name:        "updates/update-tool-configuration",
+				Name:        ruleNameUpdateToolConfiguration,
 				Aliases:     []string{"update-tool-configuration", "update-tool"},
 				Title:       "Update Tool Configuration",
-				Category:    "Updates",
+				Category:    categoryUpdates,
 				Severity:    SeverityMedium,
 				Description: "no dependency update tool configured (Dependabot or Renovate), invalid config, or missing github-actions coverage",
 			},
@@ -111,10 +111,10 @@ func availableRules() []rule {
 		},
 		{
 			RuleInfo: RuleInfo{
-				Name:        "updates/update-tool-actions-cooldown",
+				Name:        ruleNameUpdateToolActionsCooldown,
 				Aliases:     []string{"update-tool-actions-cooldown", "actions-cooldown"},
 				Title:       "Update Tool GitHub Actions Cooldown",
-				Category:    "Updates",
+				Category:    categoryUpdates,
 				Severity:    SeverityLow,
 				Description: "neither Dependabot nor Renovate sets a cooldown delay for github-actions updates, allowing immediate adoption of potentially malicious new releases",
 			},
@@ -122,10 +122,10 @@ func availableRules() []rule {
 		},
 		{
 			RuleInfo: RuleInfo{
-				Name:        "updates/update-tool-actions-pinning",
+				Name:        ruleNameUpdateToolActionsPinning,
 				Aliases:     []string{"update-tool-actions-pinning", "actions-pinning"},
 				Title:       "Renovate GitHub Actions Pinning",
-				Category:    "Updates",
+				Category:    categoryUpdates,
 				Severity:    SeverityMedium,
 				Description: "Renovate is not configured to pin GitHub Actions to immutable commit SHAs (Dependabot has no equivalent option)",
 			},
@@ -314,25 +314,25 @@ func buildRuleSuccessFinding(r rule, facts *ScanFacts, cfg *Config) *Finding {
 	severity := effectiveRuleSeverity(r, cfg)
 
 	switch r.Name {
-	case "workflows/pull-request-target":
+	case ruleNamePullRequestTarget:
 		return successFinding(r.Name, severity, "Workflow files", "SUCCESS pull_request_target event is not used", "No workflow uses `pull_request_target`, which avoids an event that should never be used in public repositories and is highly discouraged in private repositories.")
-	case "workflows/action-version-pinning":
+	case ruleNameActionVersionPinning:
 		return successFinding(r.Name, severity, "Workflow files", "SUCCESS Action versions are pinned safely", "All detected third-party actions are pinned to immutable commit SHAs instead of mutable tags or branches.")
-	case "workflows/workflow-permissions":
+	case ruleNameWorkflowPermissions:
 		return successFinding(r.Name, severity, "Workflow files", "SUCCESS Workflow permissions are explicit", "All parsed workflows define explicit `permissions`, which avoids inheriting overly broad default token access.")
-	case "actions/permissions/allowed-actions-policy":
+	case ruleNameAllowedActionsPolicy:
 		return allowedActionsSuccessFinding(r.Name, severity, facts)
-	case "actions/permissions/workflow/default-workflow-permissions":
+	case ruleNameDefaultWorkflowPermissions:
 		return defaultWorkflowPermissionsSuccessFinding(r.Name, severity, facts)
-	case "actions/permissions/workflow/actions-can-approve-prs":
+	case ruleNameActionsCanApprovePRs:
 		return actionsApprovePRsSuccessFinding(r.Name, severity, facts)
-	case "actions/permissions/fork-pr-contributor-approval":
+	case ruleNameForkPRContributorApproval:
 		return forkPRApprovalSuccessFinding(r.Name, severity, facts)
-	case "updates/update-tool-configuration":
+	case ruleNameUpdateToolConfiguration:
 		return updateToolConfigurationSuccessFinding(r.Name, severity, facts)
-	case "updates/update-tool-actions-cooldown":
+	case ruleNameUpdateToolActionsCooldown:
 		return updateToolActionsCooldownSuccessFinding(r.Name, severity, facts)
-	case "updates/update-tool-actions-pinning":
+	case ruleNameUpdateToolActionsPinning:
 		return updateToolActionsPinningSuccessFinding(r.Name, severity, facts)
 	default:
 		return successFinding(r.Name, severity, r.Category+" checks", "SUCCESS Rule passed", "This rule did not detect any matching insecure configuration in the repository.")
@@ -364,7 +364,7 @@ func allowedActionsSuccessFinding(ruleName, severity string, facts *ScanFacts) *
 	switch *permissions.AllowedActions {
 	case "local_only":
 		return successFinding(ruleName, severity, "Repository Actions settings", "SUCCESS Allowed actions policy is tightly restricted", "Only actions defined inside this repository are allowed, which blocks third-party public actions entirely.")
-	case "selected":
+	case actionsAllowedSelected:
 		return successFinding(ruleName, severity, "Repository Actions settings", "SUCCESS Allowed actions policy is restricted", "The repository does not allow all public actions by default, which limits execution to an approved set of trusted actions.")
 	default:
 		return nil
@@ -376,7 +376,7 @@ func defaultWorkflowPermissionsSuccessFinding(ruleName, severity string, facts *
 		return successFinding(ruleName, severity, "Repository Actions settings", "SUCCESS Default workflow permissions are safely constrained", "GitHub Actions are disabled for this repository, so workflows do not receive repository token permissions.")
 	}
 	perms := facts.ActionsSettings.DefaultWorkflowPermissions
-	if perms == nil || perms.DefaultWorkflowPermissions == nil || *perms.DefaultWorkflowPermissions != "read" {
+	if perms == nil || perms.DefaultWorkflowPermissions == nil || *perms.DefaultWorkflowPermissions != permissionsRead {
 		return nil
 	}
 	return successFinding(ruleName, severity, "Repository Actions settings", "SUCCESS Default workflow permissions are read-only", "The repository default for `GITHUB_TOKEN` is read-only, which limits workflow access unless a workflow explicitly requests more.")
@@ -398,7 +398,7 @@ func forkPRApprovalSuccessFinding(ruleName, severity string, facts *ScanFacts) *
 		return successFinding(ruleName, severity, "Repository Actions settings", "SUCCESS Fork pull request workflows are safely constrained", "GitHub Actions are disabled for this repository, so fork pull request workflows cannot run.")
 	}
 	policy := facts.ActionsSettings.ForkPRContributorApproval
-	if policy == nil || policy.ApprovalPolicy != "all_external_contributors" {
+	if policy == nil || policy.ApprovalPolicy != forkPRApprovalAllExternal {
 		return nil
 	}
 	return successFinding(ruleName, severity, "Repository Actions settings", "SUCCESS Fork pull request workflows require full external approval", "Fork pull request workflows require approval from all external contributors before they can run, reducing the risk of untrusted code execution.")
@@ -478,11 +478,11 @@ func updateToolActionsPinningSuccessFinding(ruleName, severity string, facts *Sc
 func ruleCategory(ruleName string) string {
 	switch {
 	case strings.HasPrefix(ruleName, "workflows/"):
-		return "Workflows"
+		return categoryWorkflows
 	case strings.HasPrefix(ruleName, "actions/"):
-		return "Settings"
+		return categorySettings
 	case strings.HasPrefix(ruleName, "updates/"):
-		return "Updates"
+		return categoryUpdates
 	default:
 		return ""
 	}
@@ -642,9 +642,9 @@ func evaluateAllowedActionsPolicyRule(facts *ScanFacts) []Finding {
 		return findings
 	}
 
-	if *permissions.AllowedActions == "all" {
+	if *permissions.AllowedActions == actionsAllowedAll {
 		findings = append(findings, Finding{
-			ID:          "settings-all-actions-allowed",
+			ID:          findingIDAllActionsAllowed,
 			Severity:    SeverityMedium,
 			Title:       "All GitHub Actions are allowed",
 			Description: "This repository allows all GitHub Actions to run without restriction. This means any public action can be used, including potentially malicious ones.",
@@ -665,9 +665,9 @@ func evaluateDefaultWorkflowPermissionsRule(facts *ScanFacts) []Finding {
 		return findings
 	}
 
-	if perms.DefaultWorkflowPermissions != nil && *perms.DefaultWorkflowPermissions == "write" {
+	if perms.DefaultWorkflowPermissions != nil && *perms.DefaultWorkflowPermissions == permissionsWrite {
 		findings = append(findings, Finding{
-			ID:          "settings-default-permissions-write",
+			ID:          findingIDDefaultPermissionsWrite,
 			Severity:    SeverityHigh,
 			Title:       "Default workflow permissions are read-write",
 			Description: "The default GITHUB_TOKEN permissions for this repository are set to read-write. This gives all workflows broad write access to the repository unless explicitly restricted per-workflow.",
@@ -689,7 +689,7 @@ func evaluateActionsCanApprovePRsRule(facts *ScanFacts) []Finding {
 	}
 
 	findings = append(findings, Finding{
-		ID:          "settings-actions-can-approve-prs",
+		ID:          findingIDActionsCanApprovePRs,
 		Severity:    SeverityMedium,
 		Title:       "GitHub Actions can approve pull requests",
 		Description: "GitHub Actions workflows are allowed to create and approve pull request reviews. This could be exploited to bypass required reviews.",
@@ -705,12 +705,12 @@ func evaluateForkPRContributorApprovalRule(facts *ScanFacts) []Finding {
 	findings = appendSettingsAccessFinding(findings, facts)
 
 	policy := facts.ActionsSettings.ForkPRContributorApproval
-	if !actionsSettingsEnabled(facts) || policy == nil || policy.ApprovalPolicy == "all_external_contributors" {
+	if !actionsSettingsEnabled(facts) || policy == nil || policy.ApprovalPolicy == forkPRApprovalAllExternal {
 		return findings
 	}
 
 	findings = append(findings, Finding{
-		ID:          "settings-fork-pr-contributor-approval-too-permissive",
+		ID:          findingIDForkPRTooPermissive,
 		Severity:    SeverityHigh,
 		Title:       "Fork PR workflows do not require approval from all external contributors",
 		Description: "The repository's 'Approval for running fork pull request workflows from contributors' setting is less restrictive than 'Require approval for all external contributors'. Some external contributors can trigger workflows without a maintainer reviewing the run first.",

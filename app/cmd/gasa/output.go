@@ -19,6 +19,22 @@ const (
 	outputFormatTable = "table"
 	outputFormatJSON  = "json"
 	outputFormatHTML  = "html"
+
+	// HTML table label strings
+	labelRule        = "Rule"
+	labelCategory    = "Category"
+	labelDescription = "Description"
+	labelFix         = "Fix"
+	labelFixURL      = "Fix URL"
+
+	// Batch report state CSS classes
+	stateClassError        = "error"
+	stateClassFindings     = "findings"
+	stateClassClean        = "clean"
+	stateClassHighFindings = "high-findings"
+
+	// GitHub API account type values
+	githubAccountTypeOrg = "Organization"
 )
 
 func termWidth() int {
@@ -66,15 +82,15 @@ func printFindingTable(f scanner.Finding, width int) {
 	printLipglossLine(style.Render(titleText))
 
 	rows := [][]string{
-		{"Rule", f.Rule},
-		{"Category", f.Category},
-		{"Description", f.Description},
+		{labelRule, f.Rule},
+		{labelCategory, f.Category},
+		{labelDescription, f.Description},
 	}
 	if !f.Success {
-		rows = append(rows, []string{"Fix", f.Remediation})
+		rows = append(rows, []string{labelFix, f.Remediation})
 	}
 	if f.FixURL != "" {
-		rows = append(rows, []string{"Fix URL", f.FixURL})
+		rows = append(rows, []string{labelFixURL, f.FixURL})
 	}
 
 	t := table.New().
@@ -84,7 +100,7 @@ func printFindingTable(f scanner.Finding, width int) {
 		BorderHeader(false).
 		BorderRow(false).
 		BorderColumn(true).
-		StyleFunc(func(row, col int) lipgloss.Style {
+		StyleFunc(func(_, col int) lipgloss.Style {
 			if col == 0 {
 				return lipgloss.NewStyle().Bold(true).Width(13).Padding(0, 1)
 			}
@@ -108,19 +124,19 @@ func printTable(result *scanner.ScanResult) {
 
 	counts := result.CountBySeverity()
 	parts := []string{}
-	if c := counts["critical"]; c > 0 {
+	if c := counts[scanner.SeverityCritical]; c > 0 {
 		parts = append(parts, fmt.Sprintf("%d critical", c))
 	}
-	if c := counts["high"]; c > 0 {
+	if c := counts[scanner.SeverityHigh]; c > 0 {
 		parts = append(parts, fmt.Sprintf("%d high", c))
 	}
-	if c := counts["medium"]; c > 0 {
+	if c := counts[scanner.SeverityMedium]; c > 0 {
 		parts = append(parts, fmt.Sprintf("%d medium", c))
 	}
-	if c := counts["low"]; c > 0 {
+	if c := counts[scanner.SeverityLow]; c > 0 {
 		parts = append(parts, fmt.Sprintf("%d low", c))
 	}
-	if c := counts["info"]; c > 0 {
+	if c := counts[scanner.SeverityInfo]; c > 0 {
 		parts = append(parts, fmt.Sprintf("%d info", c))
 	}
 
@@ -163,9 +179,9 @@ func printRulesTable() {
 		printLipglossLine(style.Render(titleText))
 
 		rows := [][]string{
-			{"Rule", rule.Name},
-			{"Category", rule.Category},
-			{"Description", rule.Description},
+			{labelRule, rule.Name},
+			{labelCategory, rule.Category},
+			{labelDescription, rule.Description},
 		}
 		if len(rule.Aliases) > 0 {
 			rows = append(rows, []string{"Aliases", strings.Join(rule.Aliases, ", ")})
@@ -178,7 +194,7 @@ func printRulesTable() {
 			BorderHeader(false).
 			BorderRow(false).
 			BorderColumn(true).
-			StyleFunc(func(row, col int) lipgloss.Style {
+			StyleFunc(func(_, col int) lipgloss.Style {
 				if col == 0 {
 					return lipgloss.NewStyle().Bold(true).Width(13).Padding(0, 1)
 				}
