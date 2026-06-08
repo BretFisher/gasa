@@ -1,4 +1,4 @@
-FROM cgr.dev/chainguard/busybox:latest
+FROM cgr.dev/chainguard/busybox:latest@sha256:b225a610a9b461ee2ebaa18ec08d58766d07bba638e6a0fd3cc0d3494bd6c642
 
 ARG TARGETPLATFORM
 
