@@ -60,7 +60,7 @@ If you truly need `pull_request_target`, keep the workflow limited to trusted ba
 
 ## References
 
-- `app/internal/scanner/workflow.go`
+- `internal/scanner/workflow.go`
 - [Events that trigger workflows: pull_request_target](https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#pull_request_target)
 - [Secure use reference for GitHub Actions](https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions)
 - [Keeping your GitHub Actions and workflows secure: Preventing pwn requests](https://securitylab.github.com/research/github-actions-preventing-pwn-requests/)

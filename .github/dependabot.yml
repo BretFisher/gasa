@@ -19,7 +19,7 @@ updates:
       prefix: "[docker] "
 
   - package-ecosystem: "gomod"
-    directory: "/app"
+    directory: "/"
     schedule:
       interval: "weekly"
     cooldown:

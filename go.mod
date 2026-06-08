@@ -1,4 +1,4 @@
-module github.com/bretfisher/github-security-assessment/app
+module github.com/bretfisher/github-security-assessment
 
 go 1.26.3
 

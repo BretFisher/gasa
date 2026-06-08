@@ -76,5 +76,5 @@ for the Renovate-side configuration check.
 
 ## References
 
-- `app/internal/scanner/workflow.go`
+- `internal/scanner/workflow.go`
 - [Security hardening for GitHub Actions: Using third-party actions](https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-third-party-actions)

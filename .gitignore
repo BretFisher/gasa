@@ -1,5 +1,5 @@
 # go artifacts
-app/bin/
+bin/
 dist/
 
 # macs and windows

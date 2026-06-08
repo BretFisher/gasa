@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"encoding/json"
@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/bretfisher/github-security-assessment/app/internal/scanner"
+	"github.com/bretfisher/github-security-assessment/internal/scanner"
 	"github.com/charmbracelet/x/term"
 
 	lipgloss "charm.land/lipgloss/v2"

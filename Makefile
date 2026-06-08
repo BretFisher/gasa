@@ -2,11 +2,11 @@
 
 # Run the CLI
 run:
-	go run ./cmd/gasa --help
+	go run . --help
 
 # Build the CLI binary
 build:
-	mkdir -p bin && go build -o bin/gasa ./cmd/gasa
+	mkdir -p bin && go build -o bin/gasa .
 
 # Clean build artifacts
 clean:
@@ -20,7 +20,7 @@ test:
 cover:
 	go test -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out -o coverage.html
-	@echo "Coverage report: app/coverage.html"
+	@echo "Coverage report: coverage.html"
 
 # Install / sync dependencies
 deps:
@@ -36,4 +36,4 @@ vet:
 
 # Lint via golangci-lint (install: brew install golangci-lint)
 lint:
-	golangci-lint run -c ../.github/linters/.golangci.yaml ./...
+	golangci-lint run -c .github/linters/.golangci.yaml ./...

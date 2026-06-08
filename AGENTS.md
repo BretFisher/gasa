@@ -52,19 +52,25 @@ Avoid expanding into unrelated tooling or broad platform scanning unless explici
 ### Project Structure
 
 ```text
-/app
-├── cmd/
-│   └── gasa/
-│       ├── main.go            # CLI entrypoint (Cobra commands)
-│       └── output.go          # Human and JSON output formatting (lipgloss v2)
+.
+├── main.go                 # CLI entrypoint (calls cmd.Execute)
+├── cmd/                     # Cobra command tree (package cmd)
+│   ├── root.go             # rootCmd, Execute(), persistent flags, Version
+│   ├── run.go              # `gasa run` + scan request/auth helpers
+│   ├── rules.go            # `gasa rules`
+│   ├── version.go          # `gasa version`
+│   ├── batch.go            # `gasa batch`
+│   ├── output.go           # Table and JSON output formatting (lipgloss v2)
+│   ├── output_html.go      # Single-repo HTML output
+│   └── output_html_batch.go # Batch HTML report
 ├── internal/
 │   └── scanner/
-│       ├── scanner.go         # Scan orchestration
-│       ├── workflow.go        # Workflow file checks
-│       ├── settings.go        # Repo Actions settings checks
-│       ├── dependabot.go      # Dependabot config checks
-│       ├── rules.go           # Rule registry, aliases, categories, CLI rule selection
-│       └── findings.go        # Finding types, severities
+│       ├── scanner.go      # Scan orchestration
+│       ├── workflow.go     # Workflow file checks
+│       ├── settings.go     # Repo Actions settings checks
+│       ├── updates.go      # Dependabot/Renovate config checks
+│       ├── rules.go        # Rule registry, aliases, categories, CLI rule selection
+│       └── findings.go     # Finding types, severities
 ├── go.mod
 ├── go.sum
 └── Makefile
@@ -75,20 +81,13 @@ Avoid expanding into unrelated tooling or broad platform scanning unless explici
 From the repo root:
 
 ```bash
-go run ./app/cmd/gasa --help
-go run ./app/cmd/gasa rules
-go run ./app/cmd/gasa run owner/repo
-go run ./app/cmd/gasa run --debug owner/repo
-go run ./app/cmd/gasa run --rule fork-pr-approval owner/repo
-go run ./app/cmd/gasa run --category workflows owner/repo
-```
+go run . --help
+go run . rules
+go run . run owner/repo
+go run . run --debug owner/repo
+go run . run --rule fork-pr-approval owner/repo
+go run . run --category workflows owner/repo
 
-From `app/`:
-
-```bash
-go run ./cmd/gasa --help
-go run ./cmd/gasa run owner/repo
-go run ./cmd/gasa run --debug owner/repo
 make build
 ./bin/gasa --help
 ```
@@ -181,7 +180,7 @@ Canonical rule names are endpoint-style where helpful, and short aliases are sup
 
 ## Current Build Targets
 
-`app/Makefile`:
+`Makefile`:
 
 - `make run` - show CLI help
 - `make build` - build `bin/gasa`
@@ -194,7 +193,7 @@ Canonical rule names are endpoint-style where helpful, and short aliases are sup
 
 ## Known Issues / Technical Debt
 
-- scanner checks still run sequentially in `app/internal/scanner/scanner.go`
+- scanner checks still run sequentially in `internal/scanner/scanner.go`
 - unauthenticated scans are limited by GitHub's 60 requests/hour API limit
 - token permission guidance should also be added to the relevant rule docs that use repository settings APIs
 - CLI help/auth troubleshooting should be expanded so users can quickly identify the minimal token permissions needed for full scans
@@ -203,10 +202,10 @@ Canonical rule names are endpoint-style where helpful, and short aliases are sup
 
 ## Guidance For Future Changes
 
-- Always run `make -C app build` and the relevant test command at the end of each task.
+- Always run `make build` and the relevant test command at the end of each task.
 
 - If adding a rule, update all of these together:
-  - `app/internal/scanner/`
+  - `internal/scanner/`
   - `docs/rules/`
   - `README.md`
   - CLI rule listing and aliases if appropriate

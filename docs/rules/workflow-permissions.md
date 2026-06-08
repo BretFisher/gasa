@@ -80,5 +80,5 @@ jobs:
 
 ## References
 
-- `app/internal/scanner/workflow.go`
+- `internal/scanner/workflow.go`
 - [Use GITHUB_TOKEN for authentication in workflows](https://docs.github.com/en/actions/security-guides/automatic-token-authentication#modifying-the-permissions-for-the-github_token)

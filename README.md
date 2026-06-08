@@ -14,13 +14,6 @@ This tool is only concerned with GitHub Actions security best practices, and goe
 From the repo root:
 
 ```bash
-make -C app build
-./app/bin/gasa --help
-```
-
-From `app/`:
-
-```bash
 make build
 ./bin/gasa --help
 ```
@@ -28,9 +21,9 @@ make build
 Useful development commands:
 
 ```bash
-make -C app test
-make -C app fmt
-make -C app deps
+make test
+make fmt
+make deps
 ```
 
 ## Usage
@@ -40,8 +33,8 @@ gasa run [flags] [owner/repo]
 gasa rules [--format table|json|html]
 
 # or via go run
-go run ./app/cmd/gasa run [flags] [owner/repo]
-go run ./app/cmd/gasa rules [--format table|json|html]
+go run . run [flags] [owner/repo]
+go run . rules [--format table|json|html]
 ```
 
 ### Commands

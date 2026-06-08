@@ -115,7 +115,7 @@ updates:
 
 ## References
 
-- `app/internal/scanner/updates.go`
+- `internal/scanner/updates.go`
 - [Get repository content](https://docs.github.com/en/rest/repos/contents#get-repository-content)
 - [Configuring Dependabot version updates](https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuring-dependabot-version-updates)
 - [Renovate configuration options](https://docs.renovatebot.com/configuration-options/)

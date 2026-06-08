@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/bretfisher/github-security-assessment/app/internal/scanner"
+	"github.com/bretfisher/github-security-assessment/internal/scanner"
 )
 
 type htmlFindingRow struct {

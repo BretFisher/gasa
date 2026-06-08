@@ -99,7 +99,7 @@ commit. Committing to a SHA ensures you get exactly the code that was reviewed.
 
 ## References
 
-- `app/internal/scanner/updates.go`
+- `internal/scanner/updates.go`
 - [Security hardening: using third-party actions](https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-third-party-actions)
 - [Renovate pinDigests option](https://docs.renovatebot.com/configuration-options/#pindigests)
 - [Renovate helpers:pinGitHubActionDigests preset](https://docs.renovatebot.com/presets-helpers/#helperspingithubactiondigests)

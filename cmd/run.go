@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"context"
@@ -6,38 +6,21 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"os/signal"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
-	"github.com/bretfisher/github-security-assessment/app/internal/scanner"
+	"github.com/bretfisher/github-security-assessment/internal/scanner"
 	"github.com/spf13/cobra"
 )
 
+// Run-only flags.
 var (
-	Version        = "dev"
-	flagTokenStdin bool
-	flagConfig     string
-	flagFormat     string
 	flagRules      []string
 	flagCategories []string
 	flagSeverities []string
 	flagSuccess    bool
-	flagDebug      bool
-	flagTimeout    time.Duration
 )
-
-var rootCmd = &cobra.Command{
-	Use:     "gasa",
-	Short:   "GitHub Actions Security Assessment",
-	Version: Version,
-	Long: `GitHub Actions Security Assessment (gasa)
-
-Scans GitHub repositories for Actions security misconfigurations,
-pinning issues, and missing dependency update automation.`,
-}
 
 type scanCommandOptions struct {
 	Format         string
@@ -83,63 +66,14 @@ var runCmd = &cobra.Command{
 	RunE: runScan,
 }
 
-var rulesCmd = &cobra.Command{
-	Use:   "rules",
-	Short: "List available rule names and aliases",
-	Args:  cobra.NoArgs,
-	RunE: func(_ *cobra.Command, _ []string) error {
-		if err := validateOutputFormat(flagFormat); err != nil {
-			return err
-		}
-		switch flagFormat {
-		case outputFormatJSON:
-			printRulesJSON()
-		case outputFormatHTML:
-			return printRulesHTML()
-		default:
-			printRulesTable()
-		}
-		return nil
-	},
-}
-
-var versionCmd = &cobra.Command{
-	Use:   "version",
-	Short: "Print the gasa version",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, _ []string) error {
-		_, err := fmt.Fprintln(cmd.OutOrStdout(), Version)
-		return err
-	},
-}
-
 func init() {
-	rootCmd.PersistentFlags().BoolVar(&flagTokenStdin, "token-stdin", false, "read GitHub token from stdin")
-	rootCmd.PersistentFlags().StringVarP(&flagConfig, "config", "c", "", "path to gasa YAML config file")
-	rootCmd.PersistentFlags().StringVar(&flagFormat, "format", outputFormatTable, "output format: table, json, or html")
-	rootCmd.PersistentFlags().BoolVar(&flagDebug, "debug", false, "print diagnostic debug output to stderr")
-	rootCmd.PersistentFlags().DurationVar(&flagTimeout, "timeout", time.Minute, "maximum time for each repo scan or repo listing operation")
+	rootCmd.AddCommand(runCmd)
 	runCmd.Flags().StringSliceVarP(&flagRules, "rule", "r", nil, "run only the specified rule (repeat or comma-separate; use 'gasa rules' to list rules)")
 	runCmd.Flags().StringSliceVar(&flagCategories, "category", nil, "run only rules in the specified category (workflows,settings,updates; repeat or comma-separate)")
 	runCmd.Flags().StringSliceVar(&flagSeverities, "severity", nil, "run only rules with the specified severity (critical,high,medium,low,info; repeat or comma-separate)")
 	runCmd.Flags().BoolVar(&flagSuccess, "success", false, "include successful rule results in the output")
 	runCmd.MarkFlagsMutuallyExclusive("rule", "category")
 	runCmd.MarkFlagsMutuallyExclusive("rule", "severity")
-
-	rootCmd.AddCommand(runCmd)
-	rootCmd.AddCommand(rulesCmd)
-	rootCmd.AddCommand(batchCmd)
-	rootCmd.AddCommand(versionCmd)
-}
-
-func main() {
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-
-	if err := rootCmd.ExecuteContext(ctx); err != nil {
-		cancel()
-		os.Exit(1)
-	}
-	cancel()
 }
 
 func runScan(cmd *cobra.Command, args []string) error {

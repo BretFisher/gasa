@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"encoding/json"
@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bretfisher/github-security-assessment/app/internal/scanner"
+	"github.com/bretfisher/github-security-assessment/internal/scanner"
 )
 
 // htmlBatchRepoEntry is the view model for a single repo in the batch report.

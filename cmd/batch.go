@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"bufio"
@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bretfisher/github-security-assessment/app/internal/scanner"
+	"github.com/bretfisher/github-security-assessment/internal/scanner"
 	"github.com/google/go-github/v84/github"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
@@ -106,6 +106,7 @@ Status and progress lines always go to stderr.`,
 }
 
 func init() {
+	rootCmd.AddCommand(batchCmd)
 	batchCmd.Flags().StringVar(&flagBatchOutput, "output", "", "write report to this file path (required for --format html and --format json)")
 	batchCmd.Flags().IntVar(&flagBatchConcurrency, "concurrency", 5, "number of repos to scan in parallel")
 	batchCmd.Flags().BoolVar(&flagBatchIncludeArchived, "include-archived", false, "include archived repos when scanning by owner/user")

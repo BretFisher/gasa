@@ -90,6 +90,6 @@ updates:
 
 ## References
 
-- `app/internal/scanner/updates.go`
+- `internal/scanner/updates.go`
 - [Dependabot cooldown option](https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file#cooldown)
 - [Renovate minimumReleaseAge](https://docs.renovatebot.com/configuration-options/#minimumreleaseage)

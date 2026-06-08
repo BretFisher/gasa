@@ -57,5 +57,5 @@ Settings > Actions > General > Approval for running fork pull request workflows 
 
 ## References
 
-- `app/internal/scanner/settings.go`
+- `internal/scanner/settings.go`
 - [Get fork PR contributor approval permissions for a repository](https://docs.github.com/en/rest/actions/permissions#get-fork-pr-contributor-approval-permissions-for-a-repository)

@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"bytes"
@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bretfisher/github-security-assessment/app/internal/scanner"
+	"github.com/bretfisher/github-security-assessment/internal/scanner"
 )
 
 func TestRepoStateClass(t *testing.T) {

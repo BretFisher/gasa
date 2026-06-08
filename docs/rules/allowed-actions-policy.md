@@ -57,5 +57,5 @@ Settings > Actions > General > Actions permissions
 
 ## References
 
-- `app/internal/scanner/settings.go`
+- `internal/scanner/settings.go`
 - [Get GitHub Actions permissions for a repository](https://docs.github.com/en/rest/actions/permissions#get-github-actions-permissions-for-a-repository)

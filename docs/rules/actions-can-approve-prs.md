@@ -51,5 +51,5 @@ Settings > Actions > General > Workflow permissions
 
 ## References
 
-- `app/internal/scanner/settings.go`
+- `internal/scanner/settings.go`
 - [Get default workflow permissions for a repository](https://docs.github.com/en/rest/actions/permissions#get-default-workflow-permissions-for-a-repository)

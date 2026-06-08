@@ -69,7 +69,7 @@ Completed work:
 - invalid config
 - missing `github-actions` coverage
 - missing `cooldown` on `github-actions` updates
-- added rule registry and aliases in `app/internal/scanner/rules.go`
+- added rule registry and aliases in `internal/scanner/rules.go`
 - added selective execution through `--rule`
 - added rule listing via `gasa rules` subcommand
 - kept default output as terminal tables and added structured output formats
@@ -247,7 +247,7 @@ Why this phase comes next:
 
 Current architecture constraints to address:
 
-- rules are registered statically in `app/internal/scanner/rules.go`
+- rules are registered statically in `internal/scanner/rules.go`
 - rule execution currently mixes rule selection with direct scanner method calls
 - workflow, settings, and Dependabot checks fetch and analyze data inside rule-specific code paths
 - this makes it harder to support reusable rule configuration or future extensibility without duplicating API calls

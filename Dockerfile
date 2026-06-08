@@ -1,14 +1,14 @@
 FROM dhi.io/golang:1-debian13-dev AS build
 
-WORKDIR /src/app
+WORKDIR /src
 
-COPY app/go.mod app/go.sum ./
+COPY go.mod go.sum ./
 RUN go mod download
 
-COPY app/ ./
+COPY . ./
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=$(go env GOARCH) \
-    go build -trimpath -ldflags="-s -w" -o /out/gasa ./cmd/gasa
+    go build -trimpath -ldflags="-s -w" -o /out/gasa .
 
 FROM scratch
 
