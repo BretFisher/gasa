@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -306,12 +307,17 @@ func isGitHubRemote(remote string) bool {
 }
 
 // buildDebugLogger returns a DebugLogger that writes [DEBUG] prefixed lines to
-// stderr when debug is true, or nil when debug is false.
+// stderr when debug is true, or nil when debug is false. Fact collection calls
+// the logger from multiple goroutines, so a mutex serializes writes to keep
+// lines from interleaving on stderr.
 func buildDebugLogger(debug bool) scanner.DebugLogger {
 	if !debug {
 		return nil
 	}
+	var mu sync.Mutex
 	return func(repo, msg string) {
+		mu.Lock()
+		defer mu.Unlock()
 		fmt.Fprintf(os.Stderr, "[DEBUG] %s | %s\n", repo, msg)
 	}
 }

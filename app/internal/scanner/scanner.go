@@ -78,6 +78,10 @@ type Scanner struct {
 // The repo parameter is "owner/repo" and is included so interleaved batch
 // output can be filtered or sorted by repository.
 // When nil, debug output is suppressed entirely.
+//
+// Fact collection runs concurrently, so a DebugLogger may be called from
+// multiple goroutines at once and must be safe for concurrent use. Each call
+// is expected to emit one whole line so interleaved output stays readable.
 type DebugLogger func(repo, msg string)
 
 type ScanOptions struct {
