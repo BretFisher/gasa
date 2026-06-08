@@ -1,0 +1,14 @@
+##########################
+## Hadolint config file ##
+##########################
+# template source: https://github.com/super-linter/super-linter/blob/main/TEMPLATES/.hadolint.yaml
+
+failure-threshold: warning
+
+ignored:
+  # DL3007: "Using latest is prone to errors if the image will ever update.
+  # Pin the version explicitly to a release tag"
+  # We intentionally use Chainguard images (cgr.dev), whose free public tier
+  # only publishes the :latest tag. Versioned/pinned tags require a paid
+  # subscription, so we cannot pin and must allow :latest here.
+  - DL3007
