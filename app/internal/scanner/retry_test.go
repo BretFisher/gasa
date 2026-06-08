@@ -194,6 +194,40 @@ func TestRetryTransportLimitsConcurrentRequests(t *testing.T) {
 	}
 }
 
+func TestRetryTransportHoldsSlotUntilBodyClose(t *testing.T) {
+	transport := newTestRetryTransport(func(req *http.Request) (*http.Response, error) {
+		return testResponse(req, http.StatusOK, nil), nil
+	})
+	transport.sem = make(chan struct{}, 1)
+
+	resp, err := transport.RoundTrip(testRequest(t, http.MethodGet))
+	if err != nil {
+		t.Fatalf("RoundTrip() error = %v", err)
+	}
+
+	// The single slot must still be held while the response body is open.
+	select {
+	case transport.sem <- struct{}{}:
+		t.Fatal("slot released before response body was closed")
+	default:
+	}
+
+	if err := resp.Body.Close(); err != nil {
+		t.Fatalf("Body.Close() error = %v", err)
+	}
+
+	// Closing the body must free the slot, and closing again must not free it twice.
+	if err := resp.Body.Close(); err != nil {
+		t.Fatalf("second Body.Close() error = %v", err)
+	}
+	transport.sem <- struct{}{} // would block/panic on a double release
+	select {
+	case transport.sem <- struct{}{}:
+		t.Fatal("slot released more than once")
+	default:
+	}
+}
+
 func newTestRetryTransport(fn func(*http.Request) (*http.Response, error)) *retryTransport {
 	transport := newRetryTransport(roundTripFunc(fn))
 	transport.baseDelay = time.Nanosecond

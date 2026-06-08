@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/google/go-github/v84/github"
@@ -51,17 +52,36 @@ func newRetryTransport(base http.RoundTripper) *retryTransport {
 
 func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Acquire an in-flight slot for the whole request lifetime, including any
-	// retry backoff. Respect cancellation so a dead context doesn't block on a
-	// full semaphore.
+	// retry backoff and the time the caller spends reading the response body.
+	// http.RoundTrip returns once the response headers arrive while the body is
+	// still streaming on the connection, so the slot is released from the body's
+	// Close rather than here. Respect cancellation so a dead context doesn't
+	// block on a full semaphore.
+	release := func() {}
 	if t.sem != nil {
 		select {
 		case t.sem <- struct{}{}:
-			defer func() { <-t.sem }()
+			var once sync.Once
+			release = func() { once.Do(func() { <-t.sem }) }
 		case <-req.Context().Done():
 			return nil, req.Context().Err()
 		}
 	}
 
+	resp, err := t.roundTrip(req)
+
+	// With no body for the caller to close, release the slot immediately;
+	// otherwise hand it off to the body wrapper so the cap reflects the full
+	// connection lifetime.
+	if err != nil || resp == nil || resp.Body == nil {
+		release()
+		return resp, err
+	}
+	resp.Body = &releaseOnClose{ReadCloser: resp.Body, release: release}
+	return resp, nil
+}
+
+func (t *retryTransport) roundTrip(req *http.Request) (*http.Response, error) {
 	if !retryableMethod(req.Method) {
 		return t.base.RoundTrip(req)
 	}
@@ -77,6 +97,19 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			return nil, err
 		}
 	}
+}
+
+// releaseOnClose releases the in-flight semaphore slot when the wrapped response
+// body is closed, so the concurrency cap covers the full request lifetime rather
+// than ending when RoundTrip returns at the response headers.
+type releaseOnClose struct {
+	io.ReadCloser
+	release func()
+}
+
+func (r *releaseOnClose) Close() error {
+	defer r.release()
+	return r.ReadCloser.Close()
 }
 
 func retryableMethod(method string) bool {
