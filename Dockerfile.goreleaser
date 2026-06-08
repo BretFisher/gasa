@@ -1,4 +1,4 @@
-FROM dhi.io/busybox:1
+FROM cgr.dev/chainguard/busybox:latest
 
 ARG TARGETPLATFORM
 

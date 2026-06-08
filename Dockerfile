@@ -1,4 +1,4 @@
-FROM dhi.io/golang:1-debian13-dev AS build
+FROM cgr.dev/chainguard/go:latest AS build
 
 WORKDIR /src
 
@@ -10,9 +10,9 @@ COPY . ./
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=$(go env GOARCH) \
     go build -trimpath -ldflags="-s -w" -o /out/gasa .
 
-FROM scratch
+FROM cgr.dev/chainguard/static:latest
 
-COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+# chainguard/static already ships CA certificates and a nonroot user (65532)
 COPY --from=build /out/gasa /gasa
 
 # run as distroless-style nonroot user/group (uid/gid 65532) in final image
