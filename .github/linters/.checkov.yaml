@@ -1,0 +1,13 @@
+# Checkov config for super-linter
+# template source: https://github.com/super-linter/super-linter/blob/main/TEMPLATES/.checkov.yaml
+
+# Don't report passed checks in output
+quiet: true
+
+# Globally skipped checks (apply to every scanned file)
+skip-check:
+  # CKV_DOCKER_7: "Ensure the base image uses a non latest version tag"
+  # We intentionally use Chainguard images (cgr.dev), whose free public tier
+  # only publishes the :latest tag. Versioned/pinned tags require a paid
+  # subscription, so we cannot pin and must allow :latest here.
+  - CKV_DOCKER_7
