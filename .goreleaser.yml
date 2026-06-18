@@ -21,7 +21,7 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      - -s -w -X github.com/bretfisher/github-security-assessment/cmd.Version={{ .Version }}
+      - -s -w -X github.com/bretfisher/gasa/cmd.Version={{ .Version }}
 
 archives:
   - id: gasa
@@ -40,9 +40,9 @@ changelog:
   sort: asc
   filters:
     exclude:
-      - '^docs:'
-      - '^test:'
-      - '^chore:'
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
 
 dockers_v2:
   - id: gasa
@@ -66,8 +66,6 @@ dockers_v2:
       - linux/arm64
 
 release:
-  github:
-    owner: bretfisher
-    name: github-security-assessment
+  # owner/name are auto-detected from the git remote (BretFisher/gasa).
   draft: false
   prerelease: auto
