@@ -1,4 +1,4 @@
-FROM cgr.dev/chainguard/go:latest@sha256:a6e840a5fb05ee6ecb4ce057ece1a697b388131fc40b9377531b07f0c32b84fb AS build
+FROM cgr.dev/chainguard/go:latest@sha256:b0b9c89693a7714b205376ef998a0559b7eaa1bc1320aded775205b3506a7878 AS build
 
 WORKDIR /src
 
