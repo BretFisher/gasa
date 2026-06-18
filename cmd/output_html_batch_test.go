@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bretfisher/github-security-assessment/internal/scanner"
+	"github.com/bretfisher/gasa/internal/scanner"
 )
 
 func TestRepoStateClass(t *testing.T) {

@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bretfisher/github-security-assessment/internal/scanner"
+	"github.com/bretfisher/gasa/internal/scanner"
 	"github.com/charmbracelet/colorprofile"
 
 	lipgloss "charm.land/lipgloss/v2"

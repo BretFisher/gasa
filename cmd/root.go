@@ -12,7 +12,7 @@ import (
 )
 
 // Version is the gasa version. It is overridden at build time via
-// -ldflags "-X github.com/bretfisher/github-security-assessment/cmd.Version=<version>".
+// -ldflags "-X github.com/bretfisher/gasa/cmd.Version=<version>".
 var Version = "dev"
 
 // Persistent flags shared by all subcommands.

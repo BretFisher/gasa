@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bretfisher/github-security-assessment/internal/scanner"
+	"github.com/bretfisher/gasa/internal/scanner"
 	"github.com/spf13/cobra"
 )
 

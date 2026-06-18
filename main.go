@@ -3,7 +3,7 @@
 // and missing dependency update automation.
 package main
 
-import "github.com/bretfisher/github-security-assessment/cmd"
+import "github.com/bretfisher/gasa/cmd"
 
 func main() {
 	cmd.Execute()

@@ -1,4 +1,4 @@
-module github.com/bretfisher/github-security-assessment
+module github.com/bretfisher/gasa
 
 go 1.26.3
 

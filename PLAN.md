@@ -458,10 +458,54 @@ Potential work later:
 - research whether `workflow_run`, `issue_comment`, or other workflow triggers should become new dangerous-trigger checks; do not add them to the existing `pull_request_target` rule until the exact risky conditions, false-positive boundaries, severities, docs, and examples are understood
 - S8 from `SECURITY-REVIEW.md` is not approved for implementation: batch HTML reports are intended for GitHub admins, and retaining detailed scan errors is currently preferred over sanitizing report diagnostics
 
+Deferred tooling decisions:
+
+- `release-please` (googleapis/release-please-action): evaluated and deferred. It automates version bumping and CHANGELOG generation from Conventional Commits, then cuts the tag/release; GoReleaser would still build and publish artifacts on that tag (they are complementary, not redundant). Not adopted now because the project has a single committer, does not yet enforce Conventional Commits, and the current `workflow_dispatch` release with an explicit version input is simpler. Revisit when either a second regular contributor lands or Conventional Commits are enforced and hands-off versioning is wanted. Prerequisite before adoption is commit-message discipline, not the action itself. Coordinate release ownership so release-please and GoReleaser do not both try to create the GitHub Release.
+
 Guardrails:
 
 - do not turn the project into a hosted service, dashboard, or broader platform product without an explicit direction change
 - keep the product CLI-first and security-focused
+
+## Phase 11: Homebrew Distribution
+
+Status: Not started
+
+Goal:
+
+- let users install the CLI with `brew install` in addition to GHCR images and raw release binaries
+
+Why this phase:
+
+- Homebrew is the most common install path for macOS/Linux CLI users
+- GoReleaser already produces the binaries, so generating a formula/cask is an incremental addition rather than a new tool
+
+Approach:
+
+- use GoReleaser's native Homebrew support to generate and publish the formula/cask on each tagged release
+- note: GoReleaser v2 is migrating the `brews:` stanza toward `homebrew_casks:`; confirm the current syntax against GoReleaser docs at implementation time
+
+Prerequisites:
+
+- create a dedicated tap repository, conventionally `bretfisher/homebrew-tap`, which enables `brew install bretfisher/tap/gasa`
+- provision a cross-repo write token: `GITHUB_TOKEN` is scoped to this repo only and cannot push to the tap repo, so a PAT or GitHub App token with `contents:write` on the tap repo is required, stored as a release secret
+- decide whether the formula installs the prebuilt release binary (preferred) versus building from source
+
+Implementation requirements:
+
+- pin and least-privilege any new token usage; do not widen the existing release job's permissions beyond what the tap push needs
+- keep the formula install path consuming the already-built, checksummed release archives so Homebrew installs match the published artifacts
+- verify a real `brew install` end to end on macOS (amd64 and arm64) before announcing the install path
+- document the Homebrew install method in `README.md` alongside the GHCR and binary install paths
+
+Recommended task breakdown:
+
+- create the `homebrew-tap` repository
+- create and store the tap write token as a secret
+- add the Homebrew stanza to `.goreleaser.yml`
+- run a test release to confirm the formula is generated and pushed
+- validate `brew install` on macOS and Linux
+- document the install path in `README.md`
 
 ## Immediate Next Tasks
 

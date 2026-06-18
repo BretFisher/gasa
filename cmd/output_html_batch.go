@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bretfisher/github-security-assessment/internal/scanner"
+	"github.com/bretfisher/gasa/internal/scanner"
 )
 
 // htmlBatchRepoEntry is the view model for a single repo in the batch report.
