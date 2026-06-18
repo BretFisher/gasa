@@ -30,10 +30,12 @@ make deps
 
 ```bash
 gasa run [flags] [owner/repo]
+gasa batch [flags] <owner-or-user | owner/repo,owner/repo,... | --input file>
 gasa rules [--format table|json|html]
 
 # or via go run
 go run . run [flags] [owner/repo]
+go run . batch [flags] <owner-or-user | ... >
 go run . rules [--format table|json|html]
 ```
 
@@ -41,7 +43,8 @@ go run . rules [--format table|json|html]
 
 | Command | Description |
 |---------|-------------|
-| `run` | Scan a repository for Actions security issues |
+| `run` | Scan a single repository for Actions security issues |
+| `batch` | Scan many repositories at once (a whole user/org, a list, or a file) and produce one combined report |
 | `rules` | List available rule names and aliases |
 
 ### Flags
@@ -51,11 +54,16 @@ go run . rules [--format table|json|html]
 | `--token-stdin` | global | Read GitHub token from stdin |
 | `--config`, `-c` | global | Path to a `gasa` YAML config file |
 | `--format` | global | Output format: `table`, `json`, or `html` |
+| `--timeout` | global | Maximum time for each repo scan or repo-listing call (default `1m`, e.g. `30s`, `2m`) |
 | `--debug` | global | Print single-line diagnostic debug output to stderr while scanning |
-| `--rule`, `-r` | `run` | Run only the specified rule name or alias (repeat or comma-separate) |
-| `--category` | `run` | Run only rules in the specified category (repeat or comma-separate; mutually exclusive with `--rule`) |
-| `--severity` | `run` | Run only rules with the specified severity: `critical`, `high`, `medium`, `low`, or `info` (repeat or comma-separate; mutually exclusive with `--rule`) |
-| `--success` | `run` | Include successful rule results in the output alongside findings |
+| `--rule`, `-r` | `run`, `batch` | Run only the specified rule name or alias (repeat or comma-separate) |
+| `--category` | `run`, `batch` | Run only rules in the specified category (repeat or comma-separate; mutually exclusive with `--rule`) |
+| `--severity` | `run`, `batch` | Run only rules with the specified severity: `critical`, `high`, `medium`, `low`, or `info` (repeat or comma-separate; mutually exclusive with `--rule`) |
+| `--success` | `run`, `batch` | Include successful rule results in the output alongside findings |
+| `--output` | `batch` | Write the combined report to this file path (required for `--format json` and `--format html`) |
+| `--concurrency` | `batch` | Number of repos to scan in parallel (default `5`) |
+| `--include-archived` | `batch` | Include archived repos when scanning a whole user or org (skipped by default) |
+| `--input` | `batch` | Path to a file with one `owner/repo` per line (`#` comments and blank lines ignored) |
 
 ### Authentication
 
@@ -134,6 +142,57 @@ gasa run --format json myorg/myrepo > results.json
 # HTML report output
 gasa run --format html myorg/myrepo > report.html
 ```
+
+## Batch Scanning
+
+Batch mode is the fastest way to assess many repositories at once and roll the results into a single report. For most maintainers and security teams this is the primary way to run `gasa`: point it at a user or org and get one report covering every repo.
+
+`gasa batch` takes exactly **one** input source:
+
+| Input | Example | Behavior |
+|-------|---------|----------|
+| User or org name | `gasa batch bretfisher` | Fetches all of that account's repos (auto-detects user vs org), most-recently-pushed first |
+| Explicit list | `gasa batch owner/repo1,owner/repo2` | Scans only the comma-separated repos |
+| File (`--input`) | `gasa batch --input repos.txt` | Reads one `owner/repo` per line; `#` comments and blank lines are ignored |
+
+Output depends on `--format`:
+
+- `--format table` (default) **streams** each repo's results to stdout as that repo finishes — good for a quick terminal pass, no `--output` needed.
+- `--format html --output report.html` writes one combined, styled HTML report — best for sharing with a team.
+- `--format json --output results.json` writes a JSON array of every repo's result — best for automation and diffing over time.
+
+Repos are scanned in parallel (`--concurrency`, default `5`). Progress lines like `[3/40] owner/repo — 5 finding(s)` always go to **stderr**, so they never pollute piped table/JSON/HTML output on stdout.
+
+```bash
+# Scan every repo in a user account or org into one HTML report (the common case)
+gasa batch bretfisher --format html --output bretfisher-security-report.html
+
+# Scan an org with more parallelism and a shared config file
+gasa batch my-org --config .gasa.yaml --concurrency 10 --format html --output my-org-report.html
+
+# Scan a hand-picked, comma-separated list of repos
+gasa batch owner/repo1,owner/repo2,owner/repo3 --format html --output report.html
+
+# Scan a curated list of repos kept in a file (one owner/repo per line)
+gasa batch --input repos.txt --format html --output report.html
+
+# Quick streaming terminal pass over an org, no output file needed
+gasa batch my-org --format table
+
+# Focus a fleet-wide scan on a single high-severity concern
+gasa batch my-org --rule action-pinning --severity high,critical --format html --output pinning-audit.html
+
+# Include archived repos (they are skipped by default)
+gasa batch my-org --include-archived --format html --output report.html
+
+# Machine-readable results for every repo, for automation
+gasa batch my-org --format json --output results.json
+
+# Cap per-repo scan time when crawling a large or slow org
+gasa batch my-org --timeout 30s --format html --output report.html
+```
+
+All of `run`'s rule filters (`--rule`, `--category`, `--severity`, `--success`), the global `--config`, and the same [authentication](#authentication) resolution work identically in batch mode. Scanning a whole user/org calls the GitHub API to list repos first, so an authenticated token is strongly recommended — unauthenticated runs are capped at 60 requests/hour and the repo listing may be incomplete.
 
 ## Config File
 
@@ -220,6 +279,8 @@ Example JSON shape:
   "scanned_at": "2026-04-04T00:00:00Z"
 }
 ```
+
+In `batch --format json` mode, the output is a JSON **array** of these per-repo objects, in the same order as the input. In `batch --format html` mode, every repo is combined into a single report file.
 
 ## Rule Selection
 
