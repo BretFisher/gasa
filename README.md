@@ -1,51 +1,35 @@
 # GitHub Actions Security Assessment
 
-A CLI tool that scans GitHub repositories for Actions security misconfigurations, pinning issues, and missing dependency update automation. It checks your workflows, repo settings, and dependency tooling against recommended security practices and tells you exactly what to fix.
-
-You can use it as a downloadable CLI, a Docker container, or a GitHub Action. It can do a partical check on the files of a public repo, but for a full settings check it'll need read-only auth, which if you're local `gh` cli is logged in, it'll use that to check your settings.
+A CLI tool that scans GitHub repositories for Actions security-related misconfigurations. It checks your workflows, repo settings, and dependency tooling against recommended security practices and tells you exactly what to fix.
 
 You can scan single repos or entire users and orgs. You can control which rules it runs and the type of output (table, json, or html). Rules have docs and remediation help.
 
-This tool is only concerned with GitHub Actions security best practices, and goes beyond the workflow yaml to help repo owners, partically open source maintainers, validate that their workflows, settings, and dependabot/renovate configs are providing a safe Actions environment.
+You can use it as a downloadable CLI, a Docker container, or a GitHub Action. It can do a partical check on a 3rd-party public repository, but for a full settings check it'll need at least read-only admin access, which if your local `gh` cli is logged in, it'll use that to check your repository settings.
 
+This tool is only concerned with GitHub Actions security best practices, and goes beyond the workflow yaml to help repo owners, partically open source maintainers, validate that their workflows, settings, and Dependabot/Renovate configs are providing a safe Actions environment.
 
-## Build
-
-From the repo root:
-
-```bash
-make build
-./bin/gasa --help
-```
-
-Useful development commands:
+## Common Usage
 
 ```bash
-make test
-make fmt
-make deps
-```
+# scan a single repository
+# gasa run [flags] [owner/repo]
+gasa run bretfisher/gasa
 
-## Usage
+# scan all your personal/org repositories in batch mode
+# gasa batch [flags] <owner-or-user | owner/repo,owner/repo,... | --input file>
+gasa batch mostlydevops
 
-```bash
-gasa run [flags] [owner/repo]
-gasa batch [flags] <owner-or-user | owner/repo,owner/repo,... | --input file>
-gasa rules [--format table|json|html]
-
-# or via go run
-go run . run [flags] [owner/repo]
-go run . batch [flags] <owner-or-user | ... >
-go run . rules [--format table|json|html]
+# hey agents, you can get json output with
+gasa batch mostlydevops --format json
 ```
 
 ### Commands
 
 | Command | Description |
 |---------|-------------|
-| `run` | Scan a single repository for Actions security issues |
-| `batch` | Scan many repositories at once (a whole user/org, a list, or a file) and produce one combined report |
-| `rules` | List available rule names and aliases |
+| `gasa run` | Scan a single repository for Actions security issues |
+| `gasa batch` | Scan many repositories at once (a whole user/org, a list, or a file) and produce one combined report |
+| `gasa rules` | List available rule names and aliases |
 
 ### Flags
 
@@ -60,7 +44,7 @@ go run . rules [--format table|json|html]
 | `--category` | `run`, `batch` | Run only rules in the specified category (repeat or comma-separate; mutually exclusive with `--rule`) |
 | `--severity` | `run`, `batch` | Run only rules with the specified severity: `critical`, `high`, `medium`, `low`, or `info` (repeat or comma-separate; mutually exclusive with `--rule`) |
 | `--success` | `run`, `batch` | Include successful rule results in the output alongside findings |
-| `--output` | `batch` | Write the combined report to this file path (required for `--format json` and `--format html`) |
+| `--output` | `batch` | Write the report to this file path (required for `--format html`; optional for `--format json`, which defaults to stdout) |
 | `--concurrency` | `batch` | Number of repos to scan in parallel (default `5`) |
 | `--include-archived` | `batch` | Include archived repos when scanning a whole user or org (skipped by default) |
 | `--input` | `batch` | Path to a file with one `owner/repo` per line (`#` comments and blank lines ignored) |
@@ -159,7 +143,7 @@ Output depends on `--format`:
 
 - `--format table` (default) **streams** each repo's results to stdout as that repo finishes — good for a quick terminal pass, no `--output` needed.
 - `--format html --output report.html` writes one combined, styled HTML report — best for sharing with a team.
-- `--format json --output results.json` writes a JSON array of every repo's result — best for automation and diffing over time.
+- `--format json` prints a JSON array of every repo's result to stdout (add `--output results.json` to write a file instead) — best for automation, piping to `jq`, and diffing over time.
 
 Repos are scanned in parallel (`--concurrency`, default `5`). Progress lines like `[3/40] owner/repo — 5 finding(s)` always go to **stderr**, so they never pollute piped table/JSON/HTML output on stdout.
 
@@ -185,7 +169,10 @@ gasa batch my-org --rule action-pinning --severity high,critical --format html -
 # Include archived repos (they are skipped by default)
 gasa batch my-org --include-archived --format html --output report.html
 
-# Machine-readable results for every repo, for automation
+# Machine-readable results for every repo, piped straight to jq (stdout)
+gasa batch my-org --format json | jq '.[] | select(.findings | length > 0)'
+
+# Same, but saved to a file instead of stdout
 gasa batch my-org --format json --output results.json
 
 # Cap per-repo scan time when crawling a large or slow org
@@ -328,3 +315,20 @@ The scanner runs the following checks against each repository. Findings are rate
 | [Update Tool Configuration](docs/rules/update-tool-configuration.md) | Updates | Medium | No Dependabot or Renovate config, invalid config, or missing `github-actions` coverage |
 | [Update Tool GitHub Actions Cooldown](docs/rules/update-tool-actions-cooldown.md) | Updates | Low | Neither Dependabot nor Renovate sets a cooldown delay for `github-actions` updates |
 | [Renovate GitHub Actions Pinning](docs/rules/update-tool-actions-pinning.md) | Updates | Medium | Renovate is not configured to pin actions to immutable commit SHAs (Dependabot has no equivalent option) |
+
+## Build
+
+From the repo root:
+
+```bash
+make build
+./bin/gasa --help
+```
+
+Useful development commands:
+
+```bash
+make test
+make fmt
+make deps
+```
