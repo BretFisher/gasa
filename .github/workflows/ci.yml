@@ -6,9 +6,6 @@ on:
       - main
   pull_request:
 
-permissions:
-  contents: read
-
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -16,6 +13,9 @@ concurrency:
 jobs:
   app:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout

@@ -9,9 +9,8 @@ on:
         required: true
         type: string
 
-permissions:
-  contents: write
-  packages: write
+# Deny all token scopes at the workflow root; each job grants only what it needs.
+permissions: {}
 
 concurrency:
   group: release-${{ github.ref }}
@@ -23,6 +22,10 @@ jobs:
     # Gates release secrets behind the `release` environment (zizmor recommendation).
     # Environment secrets are ONLY readable by a job that declares the environment.
     environment: release
+
+    permissions:
+      contents: write
+      packages: write
 
     steps:
       - name: Checkout
