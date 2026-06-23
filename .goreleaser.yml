@@ -33,8 +33,47 @@ archives:
         formats:
           - zip
 
+# macOS signing + notarization (free OSS path, uses Anchore Quill, runs on Linux).
+# Guarded by `enabled`: if MACOS_SIGN_P12 is unset (e.g. forks, local builds),
+# this step is skipped and the release still succeeds with unsigned binaries.
+notarize:
+  macos:
+    - enabled: '{{ isEnvSet "MACOS_SIGN_P12" }}'
+      ids:
+        - gasa
+      sign:
+        # base64 of your exported Developer ID Application .p12
+        certificate: "{{.Env.MACOS_SIGN_P12}}"
+        password: "{{.Env.MACOS_SIGN_PASSWORD}}"
+      notarize:
+        # App Store Connect API key (.p8) credentials
+        issuer_id: "{{.Env.MACOS_NOTARY_ISSUER_ID}}"
+        key_id: "{{.Env.MACOS_NOTARY_KEY_ID}}"
+        key: "{{.Env.MACOS_NOTARY_KEY}}"
+        wait: true
+        timeout: 20m
+
 checksum:
   name_template: checksums.txt
+
+# Homebrew tap (cask form; `brews` is deprecated as of GoReleaser v2.10).
+# Pushes a formula to BretFisher/homebrew-tap so users can:
+#   brew install bretfisher/tap/gasa
+# skip_upload guards forks / token-less runs so they don't fail.
+homebrew_casks:
+  - name: gasa
+    ids:
+      - gasa
+    binaries:
+      - gasa
+    homepage: "https://github.com/bretfisher/gasa"
+    description: "GitHub Actions Security Assessment"
+    skip_upload: '{{ if isEnvSet "HOMEBREW_TAP_TOKEN" }}false{{ else }}true{{ end }}'
+    repository:
+      owner: bretfisher
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
 
 changelog:
   sort: asc

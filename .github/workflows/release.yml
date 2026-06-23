@@ -20,6 +20,9 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # Gates release secrets behind the `release` environment (zizmor recommendation).
+    # Environment secrets are ONLY readable by a job that declares the environment.
+    environment: release
 
     steps:
       - name: Checkout
@@ -95,3 +98,13 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS signing + notarization (see .goreleaser.yml notarize block).
+          # If these secrets are unset, notarization is skipped automatically.
+          MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
+          MACOS_SIGN_PASSWORD: ${{ secrets.MACOS_SIGN_PASSWORD }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
+          # Pushes the Homebrew cask to BretFisher/homebrew-tap.
+          # Needs a PAT (not the default GITHUB_TOKEN) with Contents:write on the tap.
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
