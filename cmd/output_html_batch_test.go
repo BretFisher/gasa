@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -153,6 +154,38 @@ func TestRepoStateClass(t *testing.T) {
 				t.Errorf("repoStateClass() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestPrintBatchJSONStdout(t *testing.T) {
+	results := []batchRepoResult{
+		{RepoFullName: "owner/clean", Result: &scanner.ScanResult{RepoFullName: "owner/clean"}},
+		{RepoFullName: "owner/broken", Err: errors.New("api failure")},
+	}
+
+	out := captureStdout(t, func() {
+		// Empty outputPath means stdout — the agent-native default.
+		if err := printBatchJSON(results, ""); err != nil {
+			t.Errorf("printBatchJSON() error = %v", err)
+		}
+	})
+
+	var got []scanner.ScanResult
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("stdout is not a valid JSON array: %v\noutput: %q", err, out)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d results, want 2", len(got))
+	}
+	if got[0].RepoFullName != "owner/clean" {
+		t.Errorf("got[0].RepoFullName = %q, want %q", got[0].RepoFullName, "owner/clean")
+	}
+	// Hard errors are surfaced as a minimal ScanResult with Error set.
+	if got[1].Error != "api failure" {
+		t.Errorf("got[1].Error = %q, want %q", got[1].Error, "api failure")
+	}
+	if got[1].RepoURL != "https://github.com/owner/broken" {
+		t.Errorf("got[1].RepoURL = %q, want %q", got[1].RepoURL, "https://github.com/owner/broken")
 	}
 }
 

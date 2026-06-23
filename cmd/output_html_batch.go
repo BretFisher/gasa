@@ -157,19 +157,13 @@ func printBatchHTML(results []batchRepoResult, outputPath string) (err error) {
 	return nil
 }
 
-// printBatchJSON writes a JSON array of all ScanResults to outputPath.
+// printBatchJSON writes a JSON array of all ScanResults. When outputPath is
+// empty the array is encoded to stdout (the agent-native default, mirroring
+// `gasa run --format json`); otherwise it is written to the file at outputPath
+// and a notice is printed to stderr. Progress and status lines always go to
+// stderr, so stdout stays clean for piping to tools like jq.
 func printBatchJSON(results []batchRepoResult, outputPath string) (err error) {
-	f, err := os.Create(outputPath)
-	if err != nil {
-		return fmt.Errorf("creating output file %q: %w", outputPath, err)
-	}
-	defer func() {
-		if closeErr := f.Close(); err == nil && closeErr != nil {
-			err = fmt.Errorf("closing output file %q: %w", outputPath, closeErr)
-		}
-	}()
-
-	var scanResults []*scanner.ScanResult
+	scanResults := make([]*scanner.ScanResult, 0, len(results))
 	for _, r := range results {
 		if r.Result != nil {
 			scanResults = append(scanResults, r.Result)
@@ -182,6 +176,25 @@ func printBatchJSON(results []batchRepoResult, outputPath string) (err error) {
 			})
 		}
 	}
+
+	if outputPath == "" {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(scanResults); err != nil {
+			return fmt.Errorf("encoding JSON: %w", err)
+		}
+		return nil
+	}
+
+	f, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("creating output file %q: %w", outputPath, err)
+	}
+	defer func() {
+		if closeErr := f.Close(); err == nil && closeErr != nil {
+			err = fmt.Errorf("closing output file %q: %w", outputPath, closeErr)
+		}
+	}()
 
 	enc := json.NewEncoder(f)
 	enc.SetIndent("", "  ")

@@ -66,6 +66,12 @@ func TestBuildBatchRequest(t *testing.T) {
 			wantErr: "--output",
 		},
 		{
+			name: "json without output defaults to stdout",
+			args: []string{"owner/repo"},
+			opts: batchCommandOptions{Format: outputFormatJSON, Concurrency: 1, Timeout: time.Minute},
+			want: batchRequest{Target: "owner/repo", Format: outputFormatJSON, Concurrency: 1, Timeout: time.Minute},
+		},
+		{
 			name:    "invalid concurrency",
 			args:    []string{"owner/repo"},
 			opts:    batchCommandOptions{Format: outputFormatTable, Concurrency: 0, Timeout: time.Minute},

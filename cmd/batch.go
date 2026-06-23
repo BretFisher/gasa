@@ -90,7 +90,7 @@ Input modes (exactly one required):
 
 Output behavior:
   --format table        Streams each repo result to stdout as it completes
-  --format json         Writes a JSON array of all results to --output (required)
+  --format json         Prints a JSON array of all results to stdout, or to --output if set
   --format html         Writes a combined HTML report to --output (required)
 
 Status and progress lines always go to stderr.`,
@@ -99,6 +99,8 @@ Status and progress lines always go to stderr.`,
   gasa batch owner/repo1,owner/repo2 --format html --output report.html
   gasa batch --input repos.txt --format html --output report.html
   gasa batch owner --format table
+  gasa batch owner --format json | jq '.[] | select(.findings | length > 0)'
+  gasa batch owner --format json --output owner-report.json
   gasa batch owner --rule action-pinning --severity high,critical --format html --output report.html
   gasa batch owner --include-archived --format html --output report.html`,
 	Args: cobra.MaximumNArgs(1),
@@ -107,7 +109,7 @@ Status and progress lines always go to stderr.`,
 
 func init() {
 	rootCmd.AddCommand(batchCmd)
-	batchCmd.Flags().StringVar(&flagBatchOutput, "output", "", "write report to this file path (required for --format html and --format json)")
+	batchCmd.Flags().StringVar(&flagBatchOutput, "output", "", "write report to this file path (required for --format html; optional for --format json, defaults to stdout)")
 	batchCmd.Flags().IntVar(&flagBatchConcurrency, "concurrency", 5, "number of repos to scan in parallel")
 	batchCmd.Flags().BoolVar(&flagBatchIncludeArchived, "include-archived", false, "include archived repos when scanning by owner/user")
 	batchCmd.Flags().StringVar(&flagBatchInput, "input", "", "path to a file with one owner/repo per line")
@@ -229,9 +231,6 @@ func buildBatchRequest(args []string, opts batchCommandOptions) (batchRequest, e
 	}
 	if opts.Format == outputFormatHTML && opts.OutputPath == "" {
 		return batchRequest{}, fmt.Errorf("--output <file> is required when --format html")
-	}
-	if opts.Format == outputFormatJSON && opts.OutputPath == "" {
-		return batchRequest{}, fmt.Errorf("--output <file> is required when --format json")
 	}
 	if opts.Concurrency < 1 {
 		return batchRequest{}, fmt.Errorf("--concurrency must be at least 1")
