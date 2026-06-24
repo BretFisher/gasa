@@ -8,7 +8,10 @@ You can use it as a downloadable CLI, a Docker container, or a GitHub Action. It
 
 This tool is only concerned with GitHub Actions security best practices, and goes beyond the workflow yaml to help repo owners, partically open source maintainers, validate that their workflows, settings, and Dependabot/Renovate configs are providing a safe Actions environment.
 
-## Common Usage
+> [!WARNING]
+> Don't run `gasa` as a GitHub Actions workflow on a public repo — the findings report would be public, which is likely the last thing you want for a security report. A future feature will report findings to the GitHub Security tab to keep them private.
+
+## Quick Start
 
 ```bash
 # scan a single repository
@@ -22,6 +25,53 @@ gasa batch mostlydevops
 # hey agents, you can get json output with
 gasa batch mostlydevops --format json
 ```
+
+## Install
+
+Pick whichever fits your environment. All methods install the same `gasa` binary.
+
+### Homebrew (macOS / Linux)
+
+```bash
+brew install bretfisher/tap/gasa
+```
+
+### Docker
+
+The image is published to [GitHub Container Registry](https://github.com/bretfisher/gasa/pkgs/container/gasa) for `linux/amd64` and `linux/arm64`. The entrypoint is `gasa`, so append the same args you'd pass the CLI:
+
+```bash
+# public repo, no token needed
+docker run --rm ghcr.io/bretfisher/gasa:latest run bretfisher/gasa
+
+# pass a token for full settings checks
+docker run --rm -e GITHUB_TOKEN ghcr.io/bretfisher/gasa:latest run myorg/myrepo
+```
+
+Pin a version with a tag like `ghcr.io/bretfisher/gasa:v0.3.0` instead of `latest`.
+
+### Pre-built binary download
+
+Download a release archive for your OS/arch from the [Releases page](https://github.com/bretfisher/gasa/releases/latest), extract it, and move `gasa` onto your `PATH`.
+
+### Build from source
+
+Requires [Go](https://go.dev/dl/) 1.26+.
+
+```bash
+# install the latest tagged release straight from the module
+go install github.com/bretfisher/gasa@latest
+
+# or clone and build locally
+git clone https://github.com/bretfisher/gasa.git
+cd gasa
+make build          # outputs ./bin/gasa
+./bin/gasa --help
+```
+
+See [Build](#build) below for development commands.
+
+## Usage
 
 ### Commands
 
