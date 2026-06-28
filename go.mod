@@ -3,7 +3,7 @@ module github.com/bretfisher/gasa
 go 1.26.3
 
 require (
-	charm.land/lipgloss/v2 v2.0.3
+	charm.land/lipgloss/v2 v2.0.4
 	github.com/charmbracelet/colorprofile v0.4.3
 	github.com/charmbracelet/x/term v0.2.2
 	github.com/google/go-github/v84 v84.0.0
