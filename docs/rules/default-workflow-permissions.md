@@ -1,3 +1,37 @@
+---
+name: actions/permissions/workflow/default-workflow-permissions
+order: 5
+title: Default Workflow Permissions
+category: Settings
+severity: high
+aliases: [default-workflow-permissions, default-permissions]
+description: repository default GITHUB_TOKEN is read-write instead of read-only
+messages:
+  read-write:
+    title: Default workflow permissions are read-write
+    description: >-
+      The default GITHUB_TOKEN permissions for this repository are set to
+      read-write. This gives all workflows broad write access to the repository
+      unless explicitly restricted per-workflow.
+    fix: >-
+      WARNING: Before changing this setting, verify all workflows have explicit
+      permissions blocks (see workflow-permissions rule). Changing to read-only
+      will break workflows that need write access but don't explicitly define
+      permissions. Once workflows are updated, set default workflow permissions
+      to 'Read repository contents and packages permissions' in Settings >
+      Actions > General > Workflow permissions.
+  pass-disabled:
+    title: Default workflow permissions are safely constrained
+    description: >-
+      GitHub Actions are disabled for this repository, so workflows do not
+      receive repository token permissions.
+  pass-read:
+    title: Default workflow permissions are read-only
+    description: >-
+      The repository default for `GITHUB_TOKEN` is read-only, which limits
+      workflow access unless a workflow explicitly requests more.
+---
+
 # Default Workflow Permissions
 
 | | |

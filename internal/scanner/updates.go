@@ -234,14 +234,14 @@ func evaluateUpdateToolConfigurationFacts(facts *ScanFacts) []Finding {
 
 	// --- neither tool is configured ---
 	if dep.Missing && ren.Missing {
+		msg := ruleMessage(ruleNameUpdateToolConfiguration, "no-tool", nil)
 		return []Finding{{
 			ID:          findingIDNoUpdateTool,
 			Severity:    SeverityMedium,
-			Title:       "No dependency update tool configured",
-			Description: "This repository has neither a Dependabot configuration file nor a Renovate configuration file. Automated dependency update tooling keeps action versions and package dependencies current and helps catch vulnerable or malicious releases.",
+			Title:       msg.Title,
+			Description: msg.Description,
 			File:        defaultDependabotPath,
-			Remediation: "Add a `.github/dependabot.yml` (Dependabot) or a `renovate.json` / `.github/renovate.json` (Renovate) to enable automated dependency updates.",
-			DocURL:      "https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuring-dependabot-version-updates",
+			Remediation: msg.Fix,
 		}}
 	}
 
@@ -264,25 +264,25 @@ func evaluateUpdateToolConfigurationFacts(facts *ScanFacts) []Finding {
 func collectInvalidConfigFindings(dep DependabotFacts, ren RenovateFacts, depOK, renOK bool) []Finding {
 	var findings []Finding
 	if dep.Invalid != nil && !renOK {
+		msg := ruleMessage(ruleNameUpdateToolConfiguration, "invalid-dependabot", map[string]string{"Err": fmt.Sprintf("%v", dep.Invalid)})
 		findings = append(findings, Finding{
 			ID:          findingIDInvalidDependabot,
 			Severity:    SeverityMedium,
-			Title:       "Invalid Dependabot configuration",
-			Description: fmt.Sprintf("The dependabot configuration file could not be parsed: %v", dep.Invalid),
+			Title:       msg.Title,
+			Description: msg.Description,
 			File:        dep.Path,
-			Remediation: "Fix the YAML syntax in your dependabot.yml file.",
-			DocURL:      "https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file",
+			Remediation: msg.Fix,
 		})
 	}
 	if ren.Invalid != nil && !depOK {
+		msg := ruleMessage(ruleNameUpdateToolConfiguration, "invalid-renovate", map[string]string{"Err": fmt.Sprintf("%v", ren.Invalid)})
 		findings = append(findings, Finding{
 			ID:          "invalid-renovate",
 			Severity:    SeverityMedium,
-			Title:       "Invalid Renovate configuration",
-			Description: fmt.Sprintf("The Renovate configuration file could not be parsed: %v", ren.Invalid),
+			Title:       msg.Title,
+			Description: msg.Description,
 			File:        ren.Path,
-			Remediation: "Fix the JSON syntax in your Renovate configuration file.",
-			DocURL:      "https://docs.renovatebot.com/configuration-options/",
+			Remediation: msg.Fix,
 		})
 	}
 	return findings
@@ -317,22 +317,14 @@ func buildMissingActionsFinding(dep DependabotFacts, ren RenovateFacts, depOK, r
 		toolDesc = "your update tool"
 	}
 
+	msg := ruleMessage(ruleNameUpdateToolConfiguration, "missing-actions", map[string]string{"Tool": toolDesc})
 	return Finding{
 		ID:          findingIDMissingActionsUpdateTool,
 		Severity:    SeverityMedium,
-		Title:       "Update tool not configured for GitHub Actions",
-		Description: fmt.Sprintf("This repository has GitHub Actions workflows but %s is not configured to update them. Action versions will not be automatically kept up to date.", toolDesc),
+		Title:       msg.Title,
+		Description: msg.Description,
 		File:        updateToolFilePath(dep, ren),
-		Remediation: "Configure your update tool to track the github-actions ecosystem.\n\n" +
-			"Dependabot (.github/dependabot.yml):\n" +
-			"  - package-ecosystem: \"github-actions\"\n" +
-			"    directory: \"/\"\n" +
-			"    schedule:\n" +
-			"      interval: \"weekly\"\n\n" +
-			"Renovate (renovate.json / .github/renovate.json):\n" +
-			"  { \"enabledManagers\": [\"github-actions\"] }\n" +
-			"  (or omit enabledManagers entirely — Renovate auto-detects github-actions)",
-		DocURL: "https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file#package-ecosystem",
+		Remediation: msg.Fix,
 	}
 }
 
@@ -395,19 +387,14 @@ func evaluateUpdateToolActionsCooldownFacts(facts *ScanFacts) []Finding {
 		return nil
 	}
 
+	msg := ruleMessage(ruleNameUpdateToolActionsCooldown, "missing-cooldown", nil)
 	return []Finding{{
 		ID:          findingIDMissingActionsCooldown,
 		Severity:    SeverityLow,
-		Title:       "Update tool does not set a cooldown for GitHub Actions updates",
-		Description: "Neither Dependabot nor Renovate is configured with a cooldown delay for GitHub Actions updates. A cooldown gives the community time to detect supply-chain attacks before a new action version is automatically adopted.",
+		Title:       msg.Title,
+		Description: msg.Description,
 		File:        updateToolFilePath(dep, ren),
-		Remediation: "Add a cooldown to your update tool configuration.\n\n" +
-			"Dependabot (.github/dependabot.yml) — add to the github-actions entry:\n" +
-			"  cooldown:\n" +
-			"    default-days: 7\n\n" +
-			"Renovate (renovate.json / .github/renovate.json) — add globally or in a packageRule:\n" +
-			"  { \"minimumReleaseAge\": \"7 days\" }",
-		DocURL: "https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file#cooldown",
+		Remediation: msg.Fix,
 	}}
 }
 
@@ -458,19 +445,14 @@ func evaluateUpdateToolActionsPinningFacts(facts *ScanFacts) []Finding {
 		return nil
 	}
 
+	msg := ruleMessage(ruleNameUpdateToolActionsPinning, "not-pinning", nil)
 	return []Finding{{
 		ID:          "update-tool-actions-not-pinning",
 		Severity:    SeverityMedium,
-		Title:       "Renovate not configured to pin GitHub Actions to commit SHAs",
-		Description: "Renovate covers the github-actions ecosystem but is not configured to pin actions to immutable commit SHAs. Pinning to a SHA prevents a compromised or re-tagged action version from introducing malicious code into your workflows.",
+		Title:       msg.Title,
+		Description: msg.Description,
 		File:        updateToolFilePath(dep, ren),
-		Remediation: "Enable digest pinning in Renovate (renovate.json / .github/renovate.json).\n\n" +
-			"Top level:\n" +
-			"  { \"pinDigests\": true }\n\n" +
-			"Or via preset:\n" +
-			"  { \"extends\": [\"helpers:pinGitHubActionDigests\"] }\n\n" +
-			"Dependabot has no equivalent option (see https://github.com/dependabot/dependabot-core/issues/7913). For Dependabot-only repos, the action_pinning rule verifies workflow-level SHA pins directly.",
-		DocURL: "https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-third-party-actions",
+		Remediation: msg.Fix,
 	}}
 }
 

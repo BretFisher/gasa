@@ -46,6 +46,9 @@ type htmlRuleView struct {
 	Severity      string
 	SeverityClass string
 	Aliases       string
+	HasDocURL     bool
+	DocURL        string
+	VisibleDocURL string
 }
 
 func printHTML(result *scanner.ScanResult) error {
@@ -102,6 +105,9 @@ func printRulesHTML() error {
 			Severity:      rule.Severity,
 			SeverityClass: severityClass(scanner.Finding{Severity: rule.Severity}),
 			Aliases:       aliases,
+			HasDocURL:     rule.DocURL() != "",
+			DocURL:        rule.DocURL(),
+			VisibleDocURL: displayURL(rule.DocURL()),
 		})
 	}
 	return renderHTMLTemplate(os.Stdout, htmlRulesTemplate, views)
@@ -153,6 +159,11 @@ func formatSeverityCounts(result *scanner.ScanResult) []string {
 func displayURL(raw string) string {
 	if raw == "" {
 		return ""
+	}
+	// Rule doc links are blob URLs into this repo; show just the repo-relative
+	// path (e.g. "docs/rules/pull-request-target.md") instead of the full URL.
+	if idx := strings.Index(raw, "/docs/rules/"); idx != -1 {
+		return raw[idx+1:]
 	}
 	if trimmed, ok := strings.CutPrefix(raw, "https://github.com/"); ok {
 		return trimmed
@@ -345,6 +356,7 @@ const htmlRulesTemplate = `<!doctype html>
         <tr><th>Category</th><td>{{ .Category }}</td></tr>
         <tr><th>Description</th><td>{{ .Description }}</td></tr>
         {{ if .Aliases }}<tr><th>Aliases</th><td>{{ .Aliases }}</td></tr>{{ end }}
+        {{ if .HasDocURL }}<tr><th>Docs</th><td><a href="{{ .DocURL }}">{{ .VisibleDocURL }}</a></td></tr>{{ end }}
       </table>
     </section>
     {{ end }}

@@ -1,3 +1,55 @@
+---
+name: updates/update-tool-configuration
+order: 8
+title: Update Tool Configuration
+category: Updates
+severity: medium
+aliases: [update-tool-configuration, update-tool]
+description: no dependency update tool configured (Dependabot or Renovate), invalid config, or missing github-actions coverage
+messages:
+  no-tool:
+    title: No dependency update tool configured
+    description: >-
+      This repository has neither a Dependabot configuration file nor a Renovate
+      configuration file. Automated dependency update tooling keeps action
+      versions and package dependencies current and helps catch vulnerable or
+      malicious releases.
+    fix: >-
+      Add a `.github/dependabot.yml` (Dependabot) or a `renovate.json` /
+      `.github/renovate.json` (Renovate) to enable automated dependency updates.
+  invalid-dependabot:
+    title: Invalid Dependabot configuration
+    description: "The dependabot configuration file could not be parsed: {{.Err}}"
+    fix: Fix the YAML syntax in your dependabot.yml file.
+  invalid-renovate:
+    title: Invalid Renovate configuration
+    description: "The Renovate configuration file could not be parsed: {{.Err}}"
+    fix: Fix the JSON syntax in your Renovate configuration file.
+  missing-actions:
+    title: Update tool not configured for GitHub Actions
+    description: >-
+      This repository has GitHub Actions workflows but {{.Tool}} is not
+      configured to update them. Action versions will not be automatically kept
+      up to date.
+    fix: |-
+      Configure your update tool to track the github-actions ecosystem.
+
+      Dependabot (.github/dependabot.yml):
+        - package-ecosystem: "github-actions"
+          directory: "/"
+          schedule:
+            interval: "weekly"
+
+      Renovate (renovate.json / .github/renovate.json):
+        { "enabledManagers": ["github-actions"] }
+        (or omit enabledManagers entirely — Renovate auto-detects github-actions)
+  pass:
+    title: Dependency update tool is configured correctly
+    description: >-
+      {{.Tool}} is configured with valid configuration and includes GitHub
+      Actions updates when workflows are present.
+---
+
 # Update Tool Configuration
 
 | | |

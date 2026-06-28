@@ -1,3 +1,37 @@
+---
+name: actions/permissions/allowed-actions-policy
+order: 4
+title: Allowed Actions Policy
+category: Settings
+severity: medium
+aliases: [allowed-actions-policy, allowed-actions]
+description: repository allows all actions instead of restricting to trusted sources
+messages:
+  all-allowed:
+    title: All GitHub Actions are allowed
+    description: >-
+      This repository allows all GitHub Actions to run without restriction. This
+      means any public action can be used, including potentially malicious ones.
+    fix: >-
+      Restrict allowed actions to 'selected' and specify trusted action sources.
+      Go to Settings > Actions > General > Actions permissions.
+  pass-disabled:
+    title: GitHub Actions are disabled for this repository
+    description: >-
+      GitHub Actions are disabled, so unrestricted third-party actions cannot run
+      in this repository.
+  pass-local-only:
+    title: Allowed actions policy is tightly restricted
+    description: >-
+      Only actions defined inside this repository are allowed, which blocks
+      third-party public actions entirely.
+  pass-selected:
+    title: Allowed actions policy is restricted
+    description: >-
+      The repository does not allow all public actions by default, which limits
+      execution to an approved set of trusted actions.
+---
+
 # Allowed Actions Policy
 
 | | |

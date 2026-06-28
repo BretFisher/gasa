@@ -1,3 +1,35 @@
+---
+name: actions/permissions/fork-pr-contributor-approval
+order: 7
+title: Fork PR Workflow Approval
+category: Settings
+severity: high
+aliases: [fork-pr-contributor-approval, fork-pr-approval]
+description: external contributors can trigger fork PR workflows without maintainer approval
+messages:
+  too-permissive:
+    title: Fork PR workflows do not require approval from all external contributors
+    description: >-
+      The repository's 'Approval for running fork pull request workflows from
+      contributors' setting is less restrictive than 'Require approval for all
+      external contributors'. Some external contributors can trigger workflows
+      without a maintainer reviewing the run first.
+    fix: >-
+      Set 'Approval for running fork pull request workflows from contributors' to
+      'Require approval for all external contributors' in Settings > Actions >
+      General > Fork pull request workflows from outside collaborators.
+  pass-disabled:
+    title: Fork pull request workflows are safely constrained
+    description: >-
+      GitHub Actions are disabled for this repository, so fork pull request
+      workflows cannot run.
+  pass-all-external:
+    title: Fork pull request workflows require full external approval
+    description: >-
+      Fork pull request workflows require approval from all external contributors
+      before they can run, reducing the risk of untrusted code execution.
+---
+
 # Fork PR Workflow Approval
 
 | | |

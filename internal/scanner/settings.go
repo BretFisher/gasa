@@ -53,7 +53,6 @@ func setAccessFinding(facts *ActionsSettingsFacts, authenticated bool) {
 			Title:       "Actions settings check failed",
 			Description: "Could not read repository Actions settings. Your token may lack the required permissions (classic PAT `repo` scope or fine-grained `Administration: Read`).",
 			Remediation: "Ensure your token has admin access to this repository, or manually review Settings > Actions > General.",
-			DocURL:      docURLActionsSettings,
 		}
 	} else {
 		facts.AccessFinding = &Finding{
@@ -62,7 +61,6 @@ func setAccessFinding(facts *ActionsSettingsFacts, authenticated bool) {
 			Title:       "Actions settings check requires authentication",
 			Description: "Repository Actions settings (allowed actions policy, default permissions) can only be checked with an authenticated GitHub token.",
 			Remediation: "Set GITHUB_TOKEN, pass a token with --token-stdin, or install the gh CLI to enable this check.",
-			DocURL:      docURLActionsSettings,
 		}
 	}
 }

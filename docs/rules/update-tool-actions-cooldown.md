@@ -1,3 +1,35 @@
+---
+name: updates/update-tool-actions-cooldown
+order: 9
+title: Update Tool GitHub Actions Cooldown
+category: Updates
+severity: low
+aliases: [update-tool-actions-cooldown, actions-cooldown]
+description: neither Dependabot nor Renovate sets a cooldown delay for github-actions updates, allowing immediate adoption of potentially malicious new releases
+messages:
+  missing-cooldown:
+    title: Update tool does not set a cooldown for GitHub Actions updates
+    description: >-
+      Neither Dependabot nor Renovate is configured with a cooldown delay for
+      GitHub Actions updates. A cooldown gives the community time to detect
+      supply-chain attacks before a new action version is automatically adopted.
+    fix: |-
+      Add a cooldown to your update tool configuration.
+
+      Dependabot (.github/dependabot.yml) — add to the github-actions entry:
+        cooldown:
+          default-days: 7
+
+      Renovate (renovate.json / .github/renovate.json) — add globally or in a packageRule:
+        { "minimumReleaseAge": "7 days" }
+  pass:
+    title: GitHub Actions update cooldown is configured
+    description: >-
+      A cooldown delay for GitHub Actions updates is configured, giving the
+      community time to detect supply-chain attacks before a new version is
+      automatically adopted.
+---
+
 # Update Tool GitHub Actions Cooldown
 
 | | |

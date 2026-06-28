@@ -1,3 +1,31 @@
+---
+name: workflows/pull-request-target
+order: 1
+title: Pull Request Target
+category: Workflows
+severity: critical
+aliases: [pull-request-target]
+description: pull_request_target should not be used in public repos and is highly discouraged in private repos
+messages:
+  used:
+    title: pull_request_target event is used
+    description: >-
+      This workflow uses `pull_request_target`. That event should never be used
+      in a public repository and is highly discouraged in a private repository
+      because it runs in the context of the base branch with access to a more
+      trusted token and potentially secrets.
+    fix: >-
+      Use the `pull_request` event instead. If you cannot avoid
+      `pull_request_target`, keep the workflow limited to trusted base-branch
+      code only and never check out or execute untrusted pull request code.
+  pass:
+    title: pull_request_target event is not used
+    description: >-
+      No workflow uses `pull_request_target`, which avoids an event that should
+      never be used in public repositories and is highly discouraged in private
+      repositories.
+---
+
 # Pull Request Target
 
 | | |

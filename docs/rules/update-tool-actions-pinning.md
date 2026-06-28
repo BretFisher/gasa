@@ -1,3 +1,37 @@
+---
+name: updates/update-tool-actions-pinning
+order: 10
+title: Renovate GitHub Actions Pinning
+category: Updates
+severity: medium
+aliases: [update-tool-actions-pinning, actions-pinning]
+description: Renovate is not configured to pin GitHub Actions to immutable commit SHAs (Dependabot has no equivalent option)
+messages:
+  not-pinning:
+    title: Renovate not configured to pin GitHub Actions to commit SHAs
+    description: >-
+      Renovate covers the github-actions ecosystem but is not configured to pin
+      actions to immutable commit SHAs. Pinning to a SHA prevents a compromised
+      or re-tagged action version from introducing malicious code into your
+      workflows.
+    fix: |-
+      Enable digest pinning in Renovate (renovate.json / .github/renovate.json).
+
+      Top level:
+        { "pinDigests": true }
+
+      Or via preset:
+        { "extends": ["helpers:pinGitHubActionDigests"] }
+
+      Dependabot has no equivalent option (see https://github.com/dependabot/dependabot-core/issues/7913). For Dependabot-only repos, the action_pinning rule verifies workflow-level SHA pins directly.
+  pass:
+    title: Renovate is configured to pin GitHub Actions to commit SHAs
+    description: >-
+      Renovate is configured to pin GitHub Actions to immutable commit SHAs,
+      preventing compromised or re-tagged versions from introducing malicious
+      code.
+---
+
 # Renovate GitHub Actions Pinning
 
 | | |

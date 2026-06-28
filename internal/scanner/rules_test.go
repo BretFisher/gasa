@@ -1,11 +1,57 @@
 package scanner
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func TestAvailableRules_Count(t *testing.T) {
 	rules := AvailableRules()
 	if got := len(rules); got != 10 {
 		t.Errorf("AvailableRules() returned %d rules, want 10", got)
+	}
+}
+
+// TestRuleDocsCoverage guards the rule <-> docs/rules/*.md binding that is now
+// the single source of truth for rule metadata and report copy. It catches the
+// failure modes the front-matter design introduces: a rule with firing logic
+// but no doc page (or vice versa), a doc missing required fields, and a doc
+// whose page link would 404.
+func TestRuleDocsCoverage(t *testing.T) {
+	docsDir := filepath.Join("..", "..", "docs", "rules")
+
+	// Every rule with firing logic must have a loaded doc.
+	for name := range runFuncs {
+		if _, ok := ruleDocRegistry[name]; !ok {
+			t.Errorf("runFuncs has %q but no docs/rules page declares it", name)
+		}
+	}
+	// Every loaded doc must have firing logic, required fields, and a real file.
+	for name, doc := range ruleDocRegistry {
+		if _, ok := runFuncs[name]; !ok {
+			t.Errorf("docs/rules declares rule %q but no runFunc is registered", name)
+		}
+		if doc.Title == "" || doc.Category == "" || doc.Severity == "" || doc.Description == "" {
+			t.Errorf("rule %q is missing required front-matter (title/category/severity/description)", name)
+		}
+		if !isValidSeverity(doc.Severity) {
+			t.Errorf("rule %q has invalid severity %q", name, doc.Severity)
+		}
+		hasPass := false
+		for key := range doc.Messages {
+			if key == "pass" || strings.HasPrefix(key, "pass-") {
+				hasPass = true
+				break
+			}
+		}
+		if !hasPass {
+			t.Errorf("rule %q has no pass/pass-* message", name)
+		}
+		if _, err := os.Stat(filepath.Join(docsDir, doc.DocFile+".md")); err != nil {
+			t.Errorf("rule %q DocFile %q: %v", name, doc.DocFile, err)
+		}
 	}
 }
 

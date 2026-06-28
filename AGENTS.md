@@ -53,7 +53,8 @@ Avoid expanding into unrelated tooling or broad platform scanning unless explici
 
 ```text
 .
-├── main.go                 # CLI entrypoint (calls cmd.Execute)
+├── main.go                 # CLI entrypoint: loads embedded rule docs, calls cmd.Execute
+├── rulesdata.go            # //go:embed docs/rules/*.md (must live in root package)
 ├── cmd/                     # Cobra command tree (package cmd)
 │   ├── root.go             # rootCmd, Execute(), persistent flags, Version
 │   ├── run.go              # `gasa run` + scan request/auth helpers
@@ -69,8 +70,11 @@ Avoid expanding into unrelated tooling or broad platform scanning unless explici
 │       ├── workflow.go     # Workflow file checks
 │       ├── settings.go     # Repo Actions settings checks
 │       ├── updates.go      # Dependabot/Renovate config checks
-│       ├── rules.go        # Rule registry, aliases, categories, CLI rule selection
+│       ├── rules.go        # runFuncs (firing logic) + registry-backed rule selection
+│       ├── ruledocs.go     # Loads docs/rules/*.md front-matter; renders report copy
 │       └── findings.go     # Finding types, severities
+├── docs/rules/*.md          # SINGLE SOURCE OF TRUTH: rule metadata + report copy
+│                            #   (YAML front-matter) plus human prose body
 ├── go.mod
 ├── go.sum
 └── Makefile
@@ -204,8 +208,20 @@ Canonical rule names are endpoint-style where helpful, and short aliases are sup
 
 - Always run `make build` and the relevant test command at the end of each task.
 
-- If adding a rule, update all of these together:
-  - `internal/scanner/`
-  - `docs/rules/`
-  - `README.md`
-  - CLI rule listing and aliases if appropriate
+- Rule metadata (title, severity, category, aliases, order, description) and ALL
+  human-facing report copy (finding titles, descriptions, fix advice, success
+  messages) live in the YAML front-matter of `docs/rules/<slug>.md` — not in Go.
+  To reword a finding or its "fix", edit the front-matter `messages:` map; no Go
+  change or recompile of copy is needed. Dynamic values are `{{.Placeholders}}`
+  filled by the rule's evaluator. The prose below the front-matter is the deep
+  human doc and is also where external GitHub/Renovate docs are referenced.
+
+- If adding a rule, update these together:
+  - `docs/rules/<slug>.md` — front-matter (name, order, title, category,
+    severity, aliases, description, messages) + prose body
+  - `internal/scanner/scanner.go` — add the `ruleName…` constant
+  - `internal/scanner/rules.go` — register the name → evaluator in `runFuncs`
+  - `internal/scanner/` — implement the evaluator; render copy via
+    `ruleMessage(ruleName, key, data)` and success via `successMessage(...)`
+  - `README.md` if appropriate
+  - `TestRuleDocsCoverage` enforces the rule↔doc binding; run `make test`

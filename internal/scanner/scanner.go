@@ -48,9 +48,6 @@ const (
 	// Trigger events
 	triggerPullRequestTarget = "pull_request_target"
 
-	// Doc URLs
-	docURLActionsSettings = "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository"
-
 	// Additional finding IDs used in rules and buildFixURL
 	findingIDAllActionsAllowed       = "settings-all-actions-allowed"
 	findingIDDefaultPermissionsWrite = "settings-default-permissions-write"

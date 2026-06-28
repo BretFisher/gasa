@@ -186,6 +186,9 @@ func printRulesTable() {
 		if len(rule.Aliases) > 0 {
 			rows = append(rows, []string{"Aliases", strings.Join(rule.Aliases, ", ")})
 		}
+		if docURL := rule.DocURL(); docURL != "" {
+			rows = append(rows, []string{"Docs", docURL})
+		}
 
 		t := table.New().
 			Width(width).

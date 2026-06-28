@@ -12,6 +12,25 @@ type RuleInfo struct {
 	Category    string   `json:"category"`
 	Severity    string   `json:"severity"`
 	Description string   `json:"description"`
+	// DocFile is the slug of this rule's page under docs/rules/ (without the
+	// .md extension). It is the single source of truth that binds a rule to its
+	// in-repo documentation; DocURL() turns it into a link for reports.
+	DocFile string `json:"doc_file,omitempty"`
+}
+
+// docsBaseURL is where the rule markdown pages are published. Reports link here
+// (the repo's own rule pages) rather than to external GitHub/Renovate docs; the
+// external links live in each page's "References" section instead.
+const docsBaseURL = "https://github.com/bretfisher/gasa/blob/main/docs/rules/"
+
+// DocURL returns the absolute link to this rule's documentation page, or "" if
+// the rule has no DocFile. An absolute URL is used (not a relative path) because
+// the HTML report is a standalone file that may be opened or shared anywhere.
+func (r RuleInfo) DocURL() string {
+	if r.DocFile == "" {
+		return ""
+	}
+	return docsBaseURL + r.DocFile + ".md"
 }
 
 type rule struct {
@@ -19,119 +38,50 @@ type rule struct {
 	run func(*ScanFacts) []Finding
 }
 
+// runFuncs binds each rule's stable name to its firing logic. This is the only
+// rule "table" that stays in Go: metadata and report copy now come from the
+// docs/rules/*.md front-matter registry, while the actual detection logic — the
+// part that is genuinely code — lives here, keyed by the same name the
+// front-matter declares.
+var runFuncs = map[string]func(*ScanFacts) []Finding{
+	ruleNamePullRequestTarget:          evaluateDangerousWorkflowRule,
+	ruleNameActionVersionPinning:       evaluateActionVersionPinningRule,
+	ruleNameWorkflowPermissions:        evaluateWorkflowPermissionsRule,
+	ruleNameAllowedActionsPolicy:       evaluateAllowedActionsPolicyRule,
+	ruleNameDefaultWorkflowPermissions: evaluateDefaultWorkflowPermissionsRule,
+	ruleNameActionsCanApprovePRs:       evaluateActionsCanApprovePRsRule,
+	ruleNameForkPRContributorApproval:  evaluateForkPRContributorApprovalRule,
+	ruleNameUpdateToolConfiguration:    evaluateUpdateToolConfigurationRule,
+	ruleNameUpdateToolActionsCooldown:  evaluateUpdateToolActionsCooldownRule,
+	ruleNameUpdateToolActionsPinning:   evaluateUpdateToolActionsPinningRule,
+}
+
+// availableRules joins the loaded documentation (metadata, ordered by the
+// front-matter `order` field) with the firing logic in runFuncs. A doc without
+// a matching runFunc is skipped; TestRuleDocsCoverage guarantees that never
+// happens for a shipped rule.
 func availableRules() []rule {
-	return []rule{
-		{
+	docs := loadedRuleDocs()
+	out := make([]rule, 0, len(docs))
+	for _, doc := range docs {
+		runFn, ok := runFuncs[doc.Name]
+		if !ok {
+			continue
+		}
+		out = append(out, rule{
 			RuleInfo: RuleInfo{
-				Name:        ruleNamePullRequestTarget,
-				Aliases:     []string{"pull-request-target"},
-				Title:       "Pull Request Target",
-				Category:    categoryWorkflows,
-				Severity:    SeverityCritical,
-				Description: "pull_request_target should not be used in public repos and is highly discouraged in private repos",
+				Name:        doc.Name,
+				Aliases:     doc.Aliases,
+				Title:       doc.Title,
+				Category:    doc.Category,
+				Severity:    doc.Severity,
+				Description: doc.Description,
+				DocFile:     doc.DocFile,
 			},
-			run: evaluateDangerousWorkflowRule,
-		},
-		{
-			RuleInfo: RuleInfo{
-				Name:        ruleNameActionVersionPinning,
-				Aliases:     []string{"action-version-pinning", "action-pinning", "pinning"},
-				Title:       "Action Version Pinning",
-				Category:    categoryWorkflows,
-				Severity:    SeverityHigh,
-				Description: "actions referenced by tag or branch instead of a full commit SHA",
-			},
-			run: evaluateActionVersionPinningRule,
-		},
-		{
-			RuleInfo: RuleInfo{
-				Name:        ruleNameWorkflowPermissions,
-				Aliases:     []string{"workflow-permissions", "permissions"},
-				Title:       "Workflow Permissions",
-				Category:    categoryWorkflows,
-				Severity:    SeverityHigh,
-				Description: "workflows inherit broad default token permissions without explicit permissions blocks",
-			},
-			run: evaluateWorkflowPermissionsRule,
-		},
-		{
-			RuleInfo: RuleInfo{
-				Name:        ruleNameAllowedActionsPolicy,
-				Aliases:     []string{"allowed-actions-policy", "allowed-actions"},
-				Title:       "Allowed Actions Policy",
-				Category:    categorySettings,
-				Severity:    SeverityMedium,
-				Description: "repository allows all actions instead of restricting to trusted sources",
-			},
-			run: evaluateAllowedActionsPolicyRule,
-		},
-		{
-			RuleInfo: RuleInfo{
-				Name:        ruleNameDefaultWorkflowPermissions,
-				Aliases:     []string{"default-workflow-permissions", "default-permissions"},
-				Title:       "Default Workflow Permissions",
-				Category:    categorySettings,
-				Severity:    SeverityHigh,
-				Description: "repository default GITHUB_TOKEN is read-write instead of read-only",
-			},
-			run: evaluateDefaultWorkflowPermissionsRule,
-		},
-		{
-			RuleInfo: RuleInfo{
-				Name:        ruleNameActionsCanApprovePRs,
-				Aliases:     []string{"actions-can-approve-prs", "approve-prs"},
-				Title:       "Actions Can Approve PRs",
-				Category:    categorySettings,
-				Severity:    SeverityMedium,
-				Description: "workflows can create and approve pull request reviews",
-			},
-			run: evaluateActionsCanApprovePRsRule,
-		},
-		{
-			RuleInfo: RuleInfo{
-				Name:        ruleNameForkPRContributorApproval,
-				Aliases:     []string{"fork-pr-contributor-approval", "fork-pr-approval"},
-				Title:       "Fork PR Workflow Approval",
-				Category:    categorySettings,
-				Severity:    SeverityHigh,
-				Description: "external contributors can trigger fork PR workflows without maintainer approval",
-			},
-			run: evaluateForkPRContributorApprovalRule,
-		},
-		{
-			RuleInfo: RuleInfo{
-				Name:        ruleNameUpdateToolConfiguration,
-				Aliases:     []string{"update-tool-configuration", "update-tool"},
-				Title:       "Update Tool Configuration",
-				Category:    categoryUpdates,
-				Severity:    SeverityMedium,
-				Description: "no dependency update tool configured (Dependabot or Renovate), invalid config, or missing github-actions coverage",
-			},
-			run: evaluateUpdateToolConfigurationRule,
-		},
-		{
-			RuleInfo: RuleInfo{
-				Name:        ruleNameUpdateToolActionsCooldown,
-				Aliases:     []string{"update-tool-actions-cooldown", "actions-cooldown"},
-				Title:       "Update Tool GitHub Actions Cooldown",
-				Category:    categoryUpdates,
-				Severity:    SeverityLow,
-				Description: "neither Dependabot nor Renovate sets a cooldown delay for github-actions updates, allowing immediate adoption of potentially malicious new releases",
-			},
-			run: evaluateUpdateToolActionsCooldownRule,
-		},
-		{
-			RuleInfo: RuleInfo{
-				Name:        ruleNameUpdateToolActionsPinning,
-				Aliases:     []string{"update-tool-actions-pinning", "actions-pinning"},
-				Title:       "Renovate GitHub Actions Pinning",
-				Category:    categoryUpdates,
-				Severity:    SeverityMedium,
-				Description: "Renovate is not configured to pin GitHub Actions to immutable commit SHAs (Dependabot has no equivalent option)",
-			},
-			run: evaluateUpdateToolActionsPinningRule,
-		},
+			run: runFn,
+		})
 	}
+	return out
 }
 
 func AvailableRules() []RuleInfo {
@@ -311,15 +261,25 @@ func effectiveRuleSeverity(r rule, cfg *Config) string {
 }
 
 func buildRuleSuccessFinding(r rule, facts *ScanFacts, cfg *Config) *Finding {
+	finding := successFindingForRule(r, facts, cfg)
+	// Stamp the rule's doc page onto passing checks too, so the HTML report
+	// links every finding (success or not) back to its in-repo rule page.
+	if finding != nil {
+		finding.DocURL = r.DocURL()
+	}
+	return finding
+}
+
+func successFindingForRule(r rule, facts *ScanFacts, cfg *Config) *Finding {
 	severity := effectiveRuleSeverity(r, cfg)
 
 	switch r.Name {
 	case ruleNamePullRequestTarget:
-		return successFinding(r.Name, severity, "Workflow files", "SUCCESS pull_request_target event is not used", "No workflow uses `pull_request_target`, which avoids an event that should never be used in public repositories and is highly discouraged in private repositories.")
+		return successMessage(r.Name, severity, "Workflow files", "pass", nil)
 	case ruleNameActionVersionPinning:
-		return successFinding(r.Name, severity, "Workflow files", "SUCCESS Action versions are pinned safely", "All detected third-party actions are pinned to immutable commit SHAs instead of mutable tags or branches.")
+		return successMessage(r.Name, severity, "Workflow files", "pass", nil)
 	case ruleNameWorkflowPermissions:
-		return successFinding(r.Name, severity, "Workflow files", "SUCCESS Workflow permissions are explicit", "All parsed workflows define explicit `permissions`, which avoids inheriting overly broad default token access.")
+		return successMessage(r.Name, severity, "Workflow files", "pass", nil)
 	case ruleNameAllowedActionsPolicy:
 		return allowedActionsSuccessFinding(r.Name, severity, facts)
 	case ruleNameDefaultWorkflowPermissions:
@@ -335,18 +295,28 @@ func buildRuleSuccessFinding(r rule, facts *ScanFacts, cfg *Config) *Finding {
 	case ruleNameUpdateToolActionsPinning:
 		return updateToolActionsPinningSuccessFinding(r.Name, severity, facts)
 	default:
-		return successFinding(r.Name, severity, r.Category+" checks", "SUCCESS Rule passed", "This rule did not detect any matching insecure configuration in the repository.")
+		return successFinding(r.Name, severity, r.Category+" checks", "Rule passed", "This rule did not detect any matching insecure configuration in the repository.")
 	}
+}
+
+// successMessage renders a rule's pass message (`msgKey`) from front-matter and
+// wraps it in a success Finding. Use this instead of successFinding when the
+// copy lives in docs/rules/*.md (the normal case).
+func successMessage(ruleName, severity, location, msgKey string, data any) *Finding {
+	msg := ruleMessage(ruleName, msgKey, data)
+	return successFinding(ruleName, severity, location, msg.Title, msg.Description)
 }
 
 func successFinding(ruleName, severity, location, title, description string) *Finding {
 	return &Finding{
-		ID:          "success-" + sanitizeID(ruleName),
-		Rule:        ruleName,
-		Category:    ruleCategory(ruleName),
-		Severity:    severity,
-		Success:     true,
-		Title:       title,
+		ID:       "success-" + sanitizeID(ruleName),
+		Rule:     ruleName,
+		Category: ruleCategory(ruleName),
+		Severity: severity,
+		Success:  true,
+		// The "SUCCESS " prefix is presentation, applied here rather than stored
+		// in every front-matter pass title.
+		Title:       "SUCCESS " + title,
 		Description: description,
 		Location:    location,
 		Remediation: "No action needed.",
@@ -356,16 +326,16 @@ func successFinding(ruleName, severity, location, title, description string) *Fi
 func allowedActionsSuccessFinding(ruleName, severity string, facts *ScanFacts) *Finding {
 	permissions := facts.ActionsSettings.Permissions
 	if !actionsSettingsEnabled(facts) {
-		return successFinding(ruleName, severity, "Repository Actions settings", "SUCCESS GitHub Actions are disabled for this repository", "GitHub Actions are disabled, so unrestricted third-party actions cannot run in this repository.")
+		return successMessage(ruleName, severity, "Repository Actions settings", "pass-disabled", nil)
 	}
 	if permissions == nil || permissions.AllowedActions == nil {
 		return nil
 	}
 	switch *permissions.AllowedActions {
 	case "local_only":
-		return successFinding(ruleName, severity, "Repository Actions settings", "SUCCESS Allowed actions policy is tightly restricted", "Only actions defined inside this repository are allowed, which blocks third-party public actions entirely.")
+		return successMessage(ruleName, severity, "Repository Actions settings", "pass-local-only", nil)
 	case actionsAllowedSelected:
-		return successFinding(ruleName, severity, "Repository Actions settings", "SUCCESS Allowed actions policy is restricted", "The repository does not allow all public actions by default, which limits execution to an approved set of trusted actions.")
+		return successMessage(ruleName, severity, "Repository Actions settings", "pass-selected", nil)
 	default:
 		return nil
 	}
@@ -373,35 +343,35 @@ func allowedActionsSuccessFinding(ruleName, severity string, facts *ScanFacts) *
 
 func defaultWorkflowPermissionsSuccessFinding(ruleName, severity string, facts *ScanFacts) *Finding {
 	if !actionsSettingsEnabled(facts) {
-		return successFinding(ruleName, severity, "Repository Actions settings", "SUCCESS Default workflow permissions are safely constrained", "GitHub Actions are disabled for this repository, so workflows do not receive repository token permissions.")
+		return successMessage(ruleName, severity, "Repository Actions settings", "pass-disabled", nil)
 	}
 	perms := facts.ActionsSettings.DefaultWorkflowPermissions
 	if perms == nil || perms.DefaultWorkflowPermissions == nil || *perms.DefaultWorkflowPermissions != permissionsRead {
 		return nil
 	}
-	return successFinding(ruleName, severity, "Repository Actions settings", "SUCCESS Default workflow permissions are read-only", "The repository default for `GITHUB_TOKEN` is read-only, which limits workflow access unless a workflow explicitly requests more.")
+	return successMessage(ruleName, severity, "Repository Actions settings", "pass-read", nil)
 }
 
 func actionsApprovePRsSuccessFinding(ruleName, severity string, facts *ScanFacts) *Finding {
 	if !actionsSettingsEnabled(facts) {
-		return successFinding(ruleName, severity, "Repository Actions settings", "SUCCESS GitHub Actions cannot approve pull requests here", "GitHub Actions are disabled for this repository, so workflows cannot create or approve pull request reviews.")
+		return successMessage(ruleName, severity, "Repository Actions settings", "pass-disabled", nil)
 	}
 	perms := facts.ActionsSettings.DefaultWorkflowPermissions
 	if perms == nil || perms.CanApprovePullRequestReviews == nil || *perms.CanApprovePullRequestReviews {
 		return nil
 	}
-	return successFinding(ruleName, severity, "Repository Actions settings", "SUCCESS GitHub Actions cannot approve pull requests", "The repository does not allow workflows to create and approve pull request reviews, which helps preserve human review controls.")
+	return successMessage(ruleName, severity, "Repository Actions settings", "pass-cannot-approve", nil)
 }
 
 func forkPRApprovalSuccessFinding(ruleName, severity string, facts *ScanFacts) *Finding {
 	if !actionsSettingsEnabled(facts) {
-		return successFinding(ruleName, severity, "Repository Actions settings", "SUCCESS Fork pull request workflows are safely constrained", "GitHub Actions are disabled for this repository, so fork pull request workflows cannot run.")
+		return successMessage(ruleName, severity, "Repository Actions settings", "pass-disabled", nil)
 	}
 	policy := facts.ActionsSettings.ForkPRContributorApproval
 	if policy == nil || policy.ApprovalPolicy != forkPRApprovalAllExternal {
 		return nil
 	}
-	return successFinding(ruleName, severity, "Repository Actions settings", "SUCCESS Fork pull request workflows require full external approval", "Fork pull request workflows require approval from all external contributors before they can run, reducing the risk of untrusted code execution.")
+	return successMessage(ruleName, severity, "Repository Actions settings", "pass-all-external", nil)
 }
 
 func updateToolConfigurationSuccessFinding(ruleName, severity string, facts *ScanFacts) *Finding {
@@ -432,9 +402,7 @@ func updateToolConfigurationSuccessFinding(ruleName, severity string, facts *Sca
 		toolNames = append(toolNames, "Renovate")
 	}
 	toolDesc := strings.Join(toolNames, " and ")
-	return successFinding(ruleName, severity, "Dependency update tool configuration",
-		"SUCCESS Dependency update tool is configured correctly",
-		fmt.Sprintf("%s is configured with valid configuration and includes GitHub Actions updates when workflows are present.", toolDesc))
+	return successMessage(ruleName, severity, "Dependency update tool configuration", "pass", map[string]string{"Tool": toolDesc})
 }
 
 func updateToolActionsCooldownSuccessFinding(ruleName, severity string, facts *ScanFacts) *Finding {
@@ -455,9 +423,7 @@ func updateToolActionsCooldownSuccessFinding(ruleName, severity string, facts *S
 		return nil
 	}
 
-	return successFinding(ruleName, severity, "Dependency update tool configuration",
-		"SUCCESS GitHub Actions update cooldown is configured",
-		"A cooldown delay for GitHub Actions updates is configured, giving the community time to detect supply-chain attacks before a new version is automatically adopted.")
+	return successMessage(ruleName, severity, "Dependency update tool configuration", "pass", nil)
 }
 
 func updateToolActionsPinningSuccessFinding(ruleName, severity string, facts *ScanFacts) *Finding {
@@ -470,9 +436,7 @@ func updateToolActionsPinningSuccessFinding(ruleName, severity string, facts *Sc
 		return nil
 	}
 
-	return successFinding(ruleName, severity, "Dependency update tool configuration",
-		"SUCCESS Renovate is configured to pin GitHub Actions to commit SHAs",
-		"Renovate is configured to pin GitHub Actions to immutable commit SHAs, preventing compromised or re-tagged versions from introducing malicious code.")
+	return successMessage(ruleName, severity, "Dependency update tool configuration", "pass", nil)
 }
 
 func ruleCategory(ruleName string) string {
@@ -536,14 +500,14 @@ func evaluateDangerousWorkflowRule(facts *ScanFacts) []Finding {
 		if !wf.Valid || !hasDangerousTrigger(wf.Workflow.On) {
 			continue
 		}
+		msg := ruleMessage(ruleNamePullRequestTarget, "used", nil)
 		findings = append(findings, Finding{
 			ID:          fmt.Sprintf("dangerous-trigger-%s", wf.Path),
 			Severity:    SeverityCritical,
-			Title:       "pull_request_target event is used",
-			Description: "This workflow uses `pull_request_target`. That event should never be used in a public repository and is highly discouraged in a private repository because it runs in the context of the base branch with access to a more trusted token and potentially secrets.",
+			Title:       msg.Title,
+			Description: msg.Description,
 			File:        wf.Path,
-			Remediation: "Use the `pull_request` event instead. If you cannot avoid `pull_request_target`, keep the workflow limited to trusted base-branch code only and never check out or execute untrusted pull request code.",
-			DocURL:      "https://securitylab.github.com/research/github-actions-preventing-pwn-requests/",
+			Remediation: msg.Fix,
 		})
 	}
 	return findings
@@ -569,18 +533,18 @@ func evaluateActionVersionPinningRule(facts *ScanFacts) []Finding {
 			if shouldIgnoreActionVersionPinning(action.name, facts) {
 				continue
 			}
+			msg := ruleMessage(ruleNameActionVersionPinning, "unpinned", map[string]string{
+				"Action": shortActionName(action.name),
+				"Ref":    action.version,
+			})
 			findings = append(findings, Finding{
-				ID:       fmt.Sprintf("unpinned-%s-%s", wf.Path, sanitizeID(action.name)),
-				Severity: SeverityHigh,
-				Title:    fmt.Sprintf("Unpinned Action: %s", shortActionName(action.name)),
-				Description: fmt.Sprintf("This action uses a mutable reference '%s'. "+
-					"Tags and branches can be moved, potentially introducing malicious code.",
-					action.version),
-				File: wf.Path,
-				Line: action.line,
-				Remediation: fmt.Sprintf("Pin to a specific commit SHA instead of '%s'.",
-					action.version),
-				DocURL: "https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-third-party-actions",
+				ID:          fmt.Sprintf("unpinned-%s-%s", wf.Path, sanitizeID(action.name)),
+				Severity:    SeverityHigh,
+				Title:       msg.Title,
+				Description: msg.Description,
+				File:        wf.Path,
+				Line:        action.line,
+				Remediation: msg.Fix,
 			})
 		}
 	}
@@ -618,16 +582,14 @@ func evaluateWorkflowPermissionsRule(facts *ScanFacts) []Finding {
 		if !wf.Valid || hasExplicitPermissions(wf.Workflow) {
 			continue
 		}
+		msg := ruleMessage(ruleNameWorkflowPermissions, "no-permissions", nil)
 		findings = append(findings, Finding{
-			ID:       fmt.Sprintf("no-permissions-%s", wf.Path),
-			Severity: SeverityHigh,
-			Title:    "No explicit permissions defined",
-			Description: "This workflow does not define explicit permissions. It inherits default permissions " +
-				"which may be overly broad (often read-write access to all scopes).",
-			File: wf.Path,
-			Remediation: "Add a 'permissions:' block at the workflow or job level with minimal required permissions. " +
-				"Start with 'permissions: {}' (no permissions) and add only what's needed.",
-			DocURL: "https://docs.github.com/en/actions/security-guides/automatic-token-authentication#modifying-the-permissions-for-the-github_token",
+			ID:          fmt.Sprintf("no-permissions-%s", wf.Path),
+			Severity:    SeverityHigh,
+			Title:       msg.Title,
+			Description: msg.Description,
+			File:        wf.Path,
+			Remediation: msg.Fix,
 		})
 	}
 	return findings
@@ -643,13 +605,13 @@ func evaluateAllowedActionsPolicyRule(facts *ScanFacts) []Finding {
 	}
 
 	if *permissions.AllowedActions == actionsAllowedAll {
+		msg := ruleMessage(ruleNameAllowedActionsPolicy, "all-allowed", nil)
 		findings = append(findings, Finding{
 			ID:          findingIDAllActionsAllowed,
 			Severity:    SeverityMedium,
-			Title:       "All GitHub Actions are allowed",
-			Description: "This repository allows all GitHub Actions to run without restriction. This means any public action can be used, including potentially malicious ones.",
-			Remediation: "Restrict allowed actions to 'selected' and specify trusted action sources. Go to Settings > Actions > General > Actions permissions.",
-			DocURL:      "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository#allowing-select-actions-to-run",
+			Title:       msg.Title,
+			Description: msg.Description,
+			Remediation: msg.Fix,
 		})
 	}
 
@@ -666,13 +628,13 @@ func evaluateDefaultWorkflowPermissionsRule(facts *ScanFacts) []Finding {
 	}
 
 	if perms.DefaultWorkflowPermissions != nil && *perms.DefaultWorkflowPermissions == permissionsWrite {
+		msg := ruleMessage(ruleNameDefaultWorkflowPermissions, "read-write", nil)
 		findings = append(findings, Finding{
 			ID:          findingIDDefaultPermissionsWrite,
 			Severity:    SeverityHigh,
-			Title:       "Default workflow permissions are read-write",
-			Description: "The default GITHUB_TOKEN permissions for this repository are set to read-write. This gives all workflows broad write access to the repository unless explicitly restricted per-workflow.",
-			Remediation: "WARNING: Before changing this setting, verify all workflows have explicit permissions blocks (see workflow-permissions rule). Changing to read-only will break workflows that need write access but don't explicitly define permissions. Once workflows are updated, set default workflow permissions to 'Read repository contents and packages permissions' in Settings > Actions > General > Workflow permissions.",
-			DocURL:      "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository#setting-the-permissions-of-the-github_token-for-your-repository",
+			Title:       msg.Title,
+			Description: msg.Description,
+			Remediation: msg.Fix,
 		})
 	}
 
@@ -688,13 +650,13 @@ func evaluateActionsCanApprovePRsRule(facts *ScanFacts) []Finding {
 		return findings
 	}
 
+	msg := ruleMessage(ruleNameActionsCanApprovePRs, "can-approve", nil)
 	findings = append(findings, Finding{
 		ID:          findingIDActionsCanApprovePRs,
 		Severity:    SeverityMedium,
-		Title:       "GitHub Actions can approve pull requests",
-		Description: "GitHub Actions workflows are allowed to create and approve pull request reviews. This could be exploited to bypass required reviews.",
-		Remediation: "Disable 'Allow GitHub Actions to create and approve pull requests' in Settings > Actions > General > Workflow permissions unless specifically needed.",
-		DocURL:      "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository",
+		Title:       msg.Title,
+		Description: msg.Description,
+		Remediation: msg.Fix,
 	})
 
 	return findings
@@ -709,13 +671,13 @@ func evaluateForkPRContributorApprovalRule(facts *ScanFacts) []Finding {
 		return findings
 	}
 
+	msg := ruleMessage(ruleNameForkPRContributorApproval, "too-permissive", nil)
 	findings = append(findings, Finding{
 		ID:          findingIDForkPRTooPermissive,
 		Severity:    SeverityHigh,
-		Title:       "Fork PR workflows do not require approval from all external contributors",
-		Description: "The repository's 'Approval for running fork pull request workflows from contributors' setting is less restrictive than 'Require approval for all external contributors'. Some external contributors can trigger workflows without a maintainer reviewing the run first.",
-		Remediation: "Set 'Approval for running fork pull request workflows from contributors' to 'Require approval for all external contributors' in Settings > Actions > General > Fork pull request workflows from outside collaborators.",
-		DocURL:      "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository",
+		Title:       msg.Title,
+		Description: msg.Description,
+		Remediation: msg.Fix,
 	})
 
 	return findings
@@ -737,6 +699,7 @@ func applyRuleConfig(findings []Finding, r rule, cfg *Config) []Finding {
 	for i := range findings {
 		findings[i].Rule = r.Name
 		findings[i].Category = r.Category
+		findings[i].DocURL = r.DocURL()
 		if override := effectiveRuleSeverity(r, cfg); override != "" {
 			findings[i].Severity = override
 		}

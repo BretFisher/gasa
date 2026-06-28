@@ -1,3 +1,29 @@
+---
+name: workflows/workflow-permissions
+order: 3
+title: Workflow Permissions
+category: Workflows
+severity: high
+aliases: [workflow-permissions, permissions]
+description: workflows inherit broad default token permissions without explicit permissions blocks
+messages:
+  no-permissions:
+    title: No explicit permissions defined
+    description: >-
+      This workflow does not define explicit permissions. It inherits default
+      permissions which may be overly broad (often read-write access to all
+      scopes).
+    fix: >-
+      Add a 'permissions:' block at the workflow or job level with minimal
+      required permissions. Start with 'permissions: {}' (no permissions) and add
+      only what's needed.
+  pass:
+    title: Workflow permissions are explicit
+    description: >-
+      All parsed workflows define explicit `permissions`, which avoids inheriting
+      overly broad default token access.
+---
+
 # Workflow Permissions
 
 | | |

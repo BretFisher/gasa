@@ -1,3 +1,33 @@
+---
+name: actions/permissions/workflow/actions-can-approve-prs
+order: 6
+title: Actions Can Approve PRs
+category: Settings
+severity: medium
+aliases: [actions-can-approve-prs, approve-prs]
+description: workflows can create and approve pull request reviews
+messages:
+  can-approve:
+    title: GitHub Actions can approve pull requests
+    description: >-
+      GitHub Actions workflows are allowed to create and approve pull request
+      reviews. This could be exploited to bypass required reviews.
+    fix: >-
+      Disable 'Allow GitHub Actions to create and approve pull requests' in
+      Settings > Actions > General > Workflow permissions unless specifically
+      needed.
+  pass-disabled:
+    title: GitHub Actions cannot approve pull requests here
+    description: >-
+      GitHub Actions are disabled for this repository, so workflows cannot create
+      or approve pull request reviews.
+  pass-cannot-approve:
+    title: GitHub Actions cannot approve pull requests
+    description: >-
+      The repository does not allow workflows to create and approve pull request
+      reviews, which helps preserve human review controls.
+---
+
 # Actions Can Approve Pull Requests
 
 | | |
