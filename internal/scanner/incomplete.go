@@ -27,6 +27,20 @@ func (w FactWarning) String() string {
 	return w.Area + ": " + w.Detail
 }
 
+// formatFactWarnings renders warnings as "<area>: <cause>" strings for direct
+// rendering across every output mode. Returns nil for no warnings so the
+// ScanResult.Incomplete JSON field stays omitted on a complete scan.
+func formatFactWarnings(ws []FactWarning) []string {
+	if len(ws) == 0 {
+		return nil
+	}
+	out := make([]string, len(ws))
+	for i, w := range ws {
+		out[i] = w.String()
+	}
+	return out
+}
+
 // isNotFound reports whether err is a definitive GitHub 404 — the resource
 // genuinely does not exist — as opposed to an indeterminate failure where we
 // cannot tell whether it exists.

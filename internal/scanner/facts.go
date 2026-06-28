@@ -7,6 +7,15 @@ import (
 	"github.com/google/go-github/v84/github"
 )
 
+// addWarning records an indeterminate fact (see FactWarning). It is safe for
+// concurrent use because the four collectors — and the per-file workflow
+// fetches within one of them — run in parallel goroutines.
+func (c *factCollector) addWarning(area, detail string) {
+	c.warnMu.Lock()
+	defer c.warnMu.Unlock()
+	c.warnings = append(c.warnings, FactWarning{Area: area, Detail: detail})
+}
+
 type ScanFacts struct {
 	Repository                              *github.Repository
 	RepositoryOwner                         string
@@ -17,6 +26,11 @@ type ScanFacts struct {
 	Renovate                                RenovateFacts
 	ActionVersionPinningIgnoreSameOwner     bool
 	UpdateToolConfigurationRequireWorkflows bool
+
+	// Incomplete lists facts that could not be determined because a GitHub
+	// request failed for a reason other than a clean 404 (timeout, rate limit,
+	// 5xx, …). A non-empty slice means the scan is partial.
+	Incomplete []FactWarning
 }
 
 type WorkflowFact struct {
@@ -40,6 +54,10 @@ type DependabotFacts struct {
 	Missing      bool
 	Invalid      error
 	HasWorkflows bool
+	// Unknown is set when presence could not be determined (an indeterminate
+	// fetch error, not a clean 404). It is mutually exclusive with Missing:
+	// when Unknown, rules must not treat the tool as absent.
+	Unknown bool
 }
 
 type RenovateFacts struct {
@@ -49,11 +67,18 @@ type RenovateFacts struct {
 	Missing      bool
 	Invalid      error
 	HasWorkflows bool
+	// Unknown is set when presence could not be determined (an indeterminate
+	// fetch error, not a clean 404). It is mutually exclusive with Missing:
+	// when Unknown, rules must not treat the tool as absent.
+	Unknown bool
 }
 
 type factCollector struct {
 	client        *github.Client
 	authenticated bool
+
+	warnMu   sync.Mutex
+	warnings []FactWarning
 }
 
 func (c *factCollector) collectFacts(ctx context.Context, owner, repo string, repository *github.Repository, cfg *Config, dbg DebugLogger) *ScanFacts {
@@ -98,6 +123,10 @@ func (c *factCollector) collectFacts(ctx context.Context, owner, repo string, re
 	facts.ActionsSettings = settings
 	facts.Dependabot = dependabot
 	facts.Renovate = renovate
+
+	// Collected after Wait so every collector goroutine (and the per-file
+	// workflow fetches) has finished recording any indeterminate failures.
+	facts.Incomplete = c.warnings
 
 	return facts
 }

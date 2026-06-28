@@ -210,6 +210,10 @@ func runBatch(cmd *cobra.Command, args []string) error {
 		Timeout:        req.Timeout,
 	})
 
+	// Warn loudly if any repo's scan was partial, so an incomplete batch is
+	// never mistaken for a clean run.
+	printIncompleteSummary(results)
+
 	// Dispatch output
 	switch req.Format {
 	case outputFormatHTML:
@@ -266,6 +270,39 @@ func buildBatchRequest(args []string, opts batchCommandOptions) (batchRequest, e
 		TokenStdin:      opts.TokenStdin,
 		ConfigPath:      opts.ConfigPath,
 	}, nil
+}
+
+// printIncompleteSummary writes a stderr warning when any repo's scan was
+// partial, so an incomplete batch is never mistaken for a clean run. It goes to
+// stderr and so is visible in every output format, including JSON/HTML written
+// to a file. No-op when every scan completed.
+func printIncompleteSummary(results []batchRepoResult) {
+	repos, checks := countIncomplete(results)
+	if repos == 0 {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "\n⚠ %d repositor%s had %d incomplete check(s); findings may be partial. Re-scan affected repos or raise --timeout.\n",
+		repos, pluralRepos(repos), checks)
+}
+
+// countIncomplete returns how many repos had at least one incomplete check and
+// the total number of incomplete checks across the batch.
+func countIncomplete(results []batchRepoResult) (repos, checks int) {
+	for _, r := range results {
+		if r.Result == nil || len(r.Result.Incomplete) == 0 {
+			continue
+		}
+		repos++
+		checks += len(r.Result.Incomplete)
+	}
+	return repos, checks
+}
+
+func pluralRepos(n int) string {
+	if n == 1 {
+		return "y"
+	}
+	return "ies"
 }
 
 // runBatchScans executes scans concurrently and returns ordered results.
@@ -329,7 +366,11 @@ func runBatchScans(ctx context.Context, repos []string, s *scanner.Scanner, cfg 
 				for _, c := range counts {
 					numFindings += c
 				}
-				fmt.Fprintf(os.Stderr, "[%d/%d] %s — %d finding(s)\n", completed, total, repoFull, numFindings)
+				if n := len(result.Incomplete); n > 0 {
+					fmt.Fprintf(os.Stderr, "[%d/%d] %s — %d finding(s), %d check(s) incomplete\n", completed, total, repoFull, numFindings, n)
+				} else {
+					fmt.Fprintf(os.Stderr, "[%d/%d] %s — %d finding(s)\n", completed, total, repoFull, numFindings)
+				}
 			}
 
 			// Stream table output immediately

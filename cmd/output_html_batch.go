@@ -19,6 +19,7 @@ type htmlBatchRepoEntry struct {
 	Successes    int
 	HasError     bool
 	ErrorMsg     string
+	Incomplete   []string
 	Findings     []htmlFindingView
 }
 
@@ -122,6 +123,7 @@ func buildBatchView(results []batchRepoResult) htmlBatchView {
 			}
 			entry.Counts = formatSeverityCounts(r.Result)
 			entry.Successes = r.Result.CountSuccesses()
+			entry.Incomplete = r.Result.Incomplete
 		}
 
 		stateCounts[entry.StateClass]++
@@ -180,7 +182,7 @@ func printBatchJSON(results []batchRepoResult, outputPath string) (err error) {
 	if outputPath == "" {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		if err := enc.Encode(scanResults); err != nil {
+		if err = enc.Encode(scanResults); err != nil {
 			return fmt.Errorf("encoding JSON: %w", err)
 		}
 		return nil
@@ -305,6 +307,7 @@ const htmlBatchTemplate = `<!doctype html>
             {{ if .Counts }}{{ range .Counts }}<span class="badge">{{ . }}</span>{{ end }}{{ else }}<span class="badge">no findings</span>{{ end }}
             {{ if gt .Successes 0 }}<span class="badge">{{ .Successes }} success{{ if ne .Successes 1 }}es{{ end }}</span>{{ end }}
           </div>
+          ` + htmlIncompleteCard + `
           {{ range .Findings }}
           <section class="card {{ .SeverityClass }}">
             <h2>{{ if .Success }}{{ .Title }}{{ else }}{{ upper .Severity }}  {{ .Title }}{{ end }}</h2>

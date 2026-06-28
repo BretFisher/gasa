@@ -62,6 +62,12 @@ func (c *factCollector) collectWorkflowFacts(ctx context.Context, owner, repo st
 		ctx, owner, repo, ".github/workflows", nil,
 	)
 	if err != nil {
+		// A clean 404 means the repo simply has no workflows directory. Any
+		// other failure means we could not list it — record a warning so the
+		// (now empty) workflow rule set is not mistaken for "all checks passed".
+		if indeterminate(err) {
+			c.addWarning("workflows", describeFetchError(err))
+		}
 		if dbg != nil {
 			dbg(repoFull, "workflows dir not found or inaccessible: "+err.Error())
 		}
@@ -120,6 +126,12 @@ func parseAndAddWorkflowFile(ctx context.Context, file *github.RepositoryContent
 	}
 	fileContent, _, _, err := c.client.Repositories.GetContents(ctx, owner, repo, *file.Path, nil)
 	if err != nil {
+		// The file was just listed in the directory, so a fetch failure here is
+		// never a real "absent" — any error means a workflow we know exists went
+		// unchecked. Surface it so its rules aren't silently skipped.
+		if indeterminate(err) {
+			c.addWarning("workflow "+*file.Path, describeFetchError(err))
+		}
 		if dbg != nil {
 			dbg(repoFull, "workflow file fetch error "+*file.Path+": "+err.Error())
 		}

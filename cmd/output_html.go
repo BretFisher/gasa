@@ -35,6 +35,7 @@ type htmlResultView struct {
 	RepoFullName string
 	Counts       []string
 	Successes    int
+	Incomplete   []string
 	Findings     []htmlFindingView
 }
 
@@ -56,6 +57,7 @@ func printHTML(result *scanner.ScanResult) error {
 		RepoFullName: result.RepoFullName,
 		Counts:       formatSeverityCounts(result),
 		Successes:    result.CountSuccesses(),
+		Incomplete:   result.Incomplete,
 		Findings:     make([]htmlFindingView, 0, len(result.Findings)),
 	}
 
@@ -253,6 +255,9 @@ h1 { margin: 0 0 0.5rem; font-size: 1.9rem; }
 .low h2      { color: var(--sev-low-fg);      background: var(--sev-low-bg); }
 .info h2     { color: var(--sev-info-fg);     background: var(--sev-info-bg); }
 .success h2  { color: var(--sev-success-fg);  background: var(--sev-success-bg); }
+.incomplete h2 { color: var(--sev-medium-fg); background: var(--sev-medium-bg); }
+.incomplete ul { margin: 0; padding: 0.8rem 1rem 0.8rem 2.2rem; }
+.incomplete li { padding: 0.15rem 0; }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; vertical-align: top; padding: 0.8rem 1rem; border-top: 1px solid var(--row-border); }
 th { width: 10rem; font-weight: 700; color: var(--th-fg); }
@@ -299,6 +304,16 @@ const htmlThemeScript = `<script>
 
 const htmlThemeButton = `<button type="button" class="theme-toggle" data-theme-toggle aria-label="Toggle theme">Theme: auto</button>`
 
+// htmlIncompleteCard renders the partial-scan warning. It expects the current
+// template dot to expose an .Incomplete []string and is shared by the single
+// and batch report templates.
+const htmlIncompleteCard = `{{ if .Incomplete }}
+    <section class="card incomplete">
+      <h2>&#9888; {{ len .Incomplete }} check(s) could not be completed &mdash; findings may be partial</h2>
+      <ul>{{ range .Incomplete }}<li>{{ . }}</li>{{ end }}</ul>
+    </section>
+    {{ end }}`
+
 const htmlResultTemplate = `<!doctype html>
 <html lang="en">
 <head>
@@ -318,6 +333,7 @@ const htmlResultTemplate = `<!doctype html>
       {{ if .Counts }}{{ range .Counts }}<span class="badge">{{ . }}</span>{{ end }}{{ else }}<span class="badge">no findings</span>{{ end }}
       {{ if gt .Successes 0 }}<span class="badge">{{ .Successes }} success{{ if ne .Successes 1 }}es{{ end }}</span>{{ end }}
     </div>
+    ` + htmlIncompleteCard + `
     {{ range .Findings }}
     <section class="card {{ .SeverityClass }}">
       <h2>{{ if .Success }}{{ .Title }}{{ else }}{{ upper .Severity }}  {{ .Title }}{{ end }}</h2>

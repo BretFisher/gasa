@@ -378,7 +378,9 @@ make build
 Useful development commands:
 
 ```bash
-make test
+make test   # runs the suite with -race -shuffle=on (the CI gate)
+make cover  # writes coverage.out + coverage.html
+make lint   # golangci-lint
 make fmt
 make deps
 ```

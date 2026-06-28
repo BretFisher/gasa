@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -299,6 +300,21 @@ func TestClassifyGitHubRepoAccessError(t *testing.T) {
 			want: "API rate limit exceeded. Try again later.",
 		},
 		{
+			name: "deadline-exceeded",
+			err:  context.DeadlineExceeded,
+			want: errMsgTimedOut,
+		},
+		{
+			name: "deadline-exceeded-wrapped-in-url-error",
+			err:  &url.Error{Op: "Get", URL: "https://api.github.com/repos/o/r", Err: context.DeadlineExceeded},
+			want: errMsgTimedOut,
+		},
+		{
+			name: "canceled",
+			err:  context.Canceled,
+			want: "Canceled before GitHub responded",
+		},
+		{
 			name: "other-error",
 			err:  errors.New("dial tcp: lookup api.github.invalid"),
 			want: "Failed to access repository: dial tcp: lookup api.github.invalid",
@@ -483,6 +499,49 @@ func TestScanRepo_EndToEndMixedFindings(t *testing.T) {
 	for id, seen := range wantIDs {
 		if !seen {
 			t.Fatalf("missing finding %s", id)
+		}
+	}
+}
+
+// An indeterminate failure mid-scan must surface on result.Incomplete and must
+// not invent a "no update tool" finding from configs it never actually read.
+func TestScanRepoWithOptions_IncompleteOnIndeterminateErrors(t *testing.T) {
+	scanner, mux := newTestScanner(t, false)
+
+	handleJSON(mux, "/repos/owner/repo", map[string]any{"full_name": "owner/repo", "default_branch": "main"})
+	handle404(mux, "/repos/owner/repo/contents/.github/workflows")
+	handleJSON(mux, "/repos/owner/repo/actions/permissions", map[string]any{"enabled": true, "allowed_actions": "selected"})
+	// Both update-tool config lookups fail indeterminately (server error), so
+	// the scanner cannot tell whether a tool is configured.
+	handle500(mux,
+		"/repos/owner/repo/contents/.github/dependabot.yml",
+		"/repos/owner/repo/contents/.github/dependabot.yaml",
+	)
+	handle500(mux,
+		"/repos/owner/repo/contents/renovate.json",
+		"/repos/owner/repo/contents/renovate.json5",
+		"/repos/owner/repo/contents/.github/renovate.json",
+		"/repos/owner/repo/contents/.github/renovate.json5",
+		"/repos/owner/repo/contents/.gitlab/renovate.json",
+		"/repos/owner/repo/contents/.gitlab/renovate.json5",
+		"/repos/owner/repo/contents/.renovaterc",
+		"/repos/owner/repo/contents/.renovaterc.json",
+		"/repos/owner/repo/contents/.renovaterc.json5",
+	)
+
+	result, err := scanner.ScanRepo(context.Background(), "owner", "repo")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Error != "" {
+		t.Fatalf("unexpected result.Error: %s", result.Error)
+	}
+	if len(result.Incomplete) == 0 {
+		t.Fatalf("result.Incomplete is empty; want indeterminate checks reported")
+	}
+	for _, f := range result.Findings {
+		if f.ID == findingIDNoUpdateTool {
+			t.Fatalf("emitted false %q finding from configs that could not be read", findingIDNoUpdateTool)
 		}
 	}
 }

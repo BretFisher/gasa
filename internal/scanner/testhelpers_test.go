@@ -80,6 +80,16 @@ func handle404(mux *http.ServeMux, paths ...string) {
 	}
 }
 
+// handle500 makes the given paths return a server error — an indeterminate
+// failure (not a clean 404) used to exercise incomplete-scan reporting.
+func handle500(mux *http.ServeMux, paths ...string) {
+	for _, path := range paths {
+		mux.HandleFunc(path, func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		})
+	}
+}
+
 func requireContainsLine(t *testing.T, lines []string, want string) {
 	t.Helper()
 

@@ -3,7 +3,30 @@ package scanner
 import (
 	"context"
 	"fmt"
+	"net/http"
+
+	"github.com/google/go-github/v84/github"
 )
+
+// isAccessDenied reports whether resp is a determinate "no access" response: a
+// 404, or a 403 that is not a rate limit. These mean the setting cannot be read
+// for a stable reason (token scope, SSO, repo policy) and are already surfaced
+// to the user as an AccessFinding — so they must NOT be counted as an
+// incomplete check. A rate-limit 403, a 429, a 5xx, or a transport error
+// (resp == nil) is indeterminate and should be flagged.
+func isAccessDenied(resp *github.Response) bool {
+	if resp == nil || resp.Response == nil {
+		return false
+	}
+	switch resp.StatusCode {
+	case http.StatusNotFound:
+		return true
+	case http.StatusForbidden:
+		return !isPrimaryRateLimitResponse(resp.Response)
+	default:
+		return false
+	}
+}
 
 func (c *factCollector) collectActionsSettingsFacts(ctx context.Context, owner, repo string, dbg DebugLogger) ActionsSettingsFacts {
 	facts := ActionsSettingsFacts{}
@@ -12,9 +35,23 @@ func (c *factCollector) collectActionsSettingsFacts(ctx context.Context, owner, 
 	if dbg != nil {
 		dbg(repoFull, "GET /repos/"+repoFull+"/actions/permissions")
 	}
-	permissions, _, err := c.client.Repositories.GetActionsPermissions(ctx, owner, repo)
+	permissions, resp, err := c.client.Repositories.GetActionsPermissions(ctx, owner, repo)
 	if err != nil {
-		setAccessFinding(&facts, c.authenticated)
+		// Three distinct causes, three distinct messages:
+		//   - unauthenticated      → tell them to supply a token
+		//   - authenticated denial → tell them exactly which permission to add
+		//   - transient (5xx, …)   → an incomplete-scan warning with the real cause
+		// A denial is determinate and fully explained by its finding, so it is
+		// NOT also counted as incomplete (that would double-report and erode
+		// trust in the incomplete warning).
+		switch {
+		case !c.authenticated:
+			setUnauthenticatedAccessFinding(&facts)
+		case isAccessDenied(resp):
+			setAccessDeniedFinding(&facts)
+		default:
+			c.addWarning("actions settings", describeFetchError(err))
+		}
 		if dbg != nil {
 			dbg(repoFull, "actions/permissions fetch error: "+err.Error())
 		}
@@ -43,25 +80,38 @@ func (c *factCollector) collectActionsSettingsFacts(ctx context.Context, owner, 
 	return facts
 }
 
-// setAccessFinding populates facts.AccessFinding with the appropriate finding
-// depending on whether the caller was authenticated.
-func setAccessFinding(facts *ActionsSettingsFacts, authenticated bool) {
-	if authenticated {
-		facts.AccessFinding = &Finding{
-			ID:          findingIDSettingsCheckFailed,
-			Severity:    SeverityInfo,
-			Title:       "Actions settings check failed",
-			Description: "Could not read repository Actions settings. Your token may lack the required permissions (classic PAT `repo` scope or fine-grained `Administration: Read`).",
-			Remediation: "Ensure your token has admin access to this repository, or manually review Settings > Actions > General.",
-		}
-	} else {
-		facts.AccessFinding = &Finding{
-			ID:          findingIDSettingsCheckUnavailable,
-			Severity:    SeverityInfo,
-			Title:       "Actions settings check requires authentication",
-			Description: "Repository Actions settings (allowed actions policy, default permissions) can only be checked with an authenticated GitHub token.",
-			Remediation: "Set GITHUB_TOKEN, pass a token with --token-stdin, or install the gh CLI to enable this check.",
-		}
+// setAccessDeniedFinding records that an authenticated token was accepted but
+// lacks the repository-admin permission needed to read Actions settings. The
+// remediation names the exact scope/permission for both token types so the user
+// can fix it without guessing — reading these settings requires repo admin even
+// on public repos, and GitHub returns 403/404 when it is missing.
+func setAccessDeniedFinding(facts *ActionsSettingsFacts) {
+	facts.AccessFinding = &Finding{
+		ID:       findingIDSettingsCheckFailed,
+		Severity: SeverityInfo,
+		Title:    "Actions settings check skipped — token lacks repo admin access",
+		Description: "The token was accepted but cannot read this repository's Actions security settings " +
+			"(allowed-actions policy, default workflow permissions, fork-PR approval), so those checks were skipped. " +
+			"Reading them requires admin access to the repository.",
+		Remediation: "Grant the token repository admin access, then re-run:\n" +
+			"  • classic PAT: add the `repo` scope (full control of private repositories)\n" +
+			"  • fine-grained PAT: set Repository permissions → `Administration` to Read-only\n" +
+			"  • gh CLI token: run `gh auth refresh -s repo` (or use a PAT with the scopes above)\n" +
+			"If the repository belongs to an org with SSO enforced, also authorize the token for that org. " +
+			"Alternatively, review the settings manually under Settings → Actions → General.",
+	}
+}
+
+// setUnauthenticatedAccessFinding records that Actions settings could not be
+// read because no token was supplied. These settings are never available
+// anonymously, so the fix is to authenticate.
+func setUnauthenticatedAccessFinding(facts *ActionsSettingsFacts) {
+	facts.AccessFinding = &Finding{
+		ID:          findingIDSettingsCheckUnavailable,
+		Severity:    SeverityInfo,
+		Title:       "Actions settings check requires authentication",
+		Description: "Repository Actions settings (allowed-actions policy, default workflow permissions, fork-PR approval) can only be read with an authenticated GitHub token that has repository admin access.",
+		Remediation: "Authenticate with a token that has repo admin access: set GITHUB_TOKEN, pass one via --token-stdin, or sign in with the gh CLI (`gh auth login`). See the access-denied guidance for the exact scopes.",
 	}
 }
 
@@ -72,15 +122,22 @@ func fetchAuthenticatedActionsSettings(ctx context.Context, c *factCollector, ow
 		dbg(repoFull, "GET /repos/"+repoFull+"/actions/permissions/workflow")
 	}
 	perms, resp, err := c.client.Repositories.GetDefaultWorkflowPermissions(ctx, owner, repo)
-	if err == nil {
+	switch {
+	case err == nil:
 		facts.DefaultWorkflowPermissions = perms
 		if dbg != nil {
 			dbg(repoFull, fmt.Sprintf("workflow permissions: default=%q can_approve_prs=%v",
 				perms.GetDefaultWorkflowPermissions(), perms.GetCanApprovePullRequestReviews()))
 		}
-	} else if resp != nil && (resp.StatusCode == 403 || resp.StatusCode == 404) {
+	case isAccessDenied(resp):
+		// Determinate "not accessible / not available" — nothing to flag.
 		if dbg != nil {
 			dbg(repoFull, fmt.Sprintf("workflow permissions fetch: status %d — skipped", resp.StatusCode))
+		}
+	default:
+		c.addWarning("workflow default permissions", describeFetchError(err))
+		if dbg != nil {
+			dbg(repoFull, "workflow permissions fetch could not be determined: "+describeFetchError(err))
 		}
 	}
 
@@ -88,14 +145,20 @@ func fetchAuthenticatedActionsSettings(ctx context.Context, c *factCollector, ow
 		dbg(repoFull, "GET /repos/"+repoFull+"/actions/permissions/fork-pr-contributor-approval")
 	}
 	policy, resp, err := c.client.Actions.GetForkPRContributorApprovalPermissions(ctx, owner, repo)
-	if err == nil {
+	switch {
+	case err == nil:
 		facts.ForkPRContributorApproval = policy
 		if dbg != nil {
 			dbg(repoFull, "fork-pr-approval: policy="+policy.ApprovalPolicy)
 		}
-	} else if resp != nil && (resp.StatusCode == 403 || resp.StatusCode == 404) {
+	case isAccessDenied(resp):
 		if dbg != nil {
 			dbg(repoFull, fmt.Sprintf("fork-pr-approval fetch: status %d — skipped", resp.StatusCode))
+		}
+	default:
+		c.addWarning("fork-PR contributor approval", describeFetchError(err))
+		if dbg != nil {
+			dbg(repoFull, "fork-pr-approval fetch could not be determined: "+describeFetchError(err))
 		}
 	}
 }

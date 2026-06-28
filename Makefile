@@ -12,9 +12,12 @@ build:
 clean:
 	rm -rf bin/ gasa coverage.out coverage.html
 
-# Run tests
+# Run tests with the race detector and randomized order. This is the gate CI
+# runs: the scanner fans out concurrent collectors and a shared in-flight
+# semaphore, so -race is the tool that catches that class of bug. -shuffle=on
+# surfaces hidden inter-test ordering dependencies.
 test:
-	go test ./...
+	go test -race -shuffle=on ./...
 
 # Run tests with coverage; writes coverage.out and coverage.html
 cover:

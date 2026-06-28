@@ -100,34 +100,45 @@ func (c *factCollector) collectDependabotFacts(ctx context.Context, owner, repo 
 		HasWorkflows: hasWorkflows,
 	}
 
-	if dbg != nil {
-		dbg(repoFull, "GET /repos/"+repoFull+"/contents/"+defaultDependabotPath)
-	}
-	fileContent, _, _, err := c.client.Repositories.GetContents(ctx, owner, repo, defaultDependabotPath, nil)
-	if err != nil {
+	// Probe both known Dependabot config filenames. A clean 404 on every path
+	// means the config is genuinely absent; an indeterminate error (timeout,
+	// rate limit, 5xx) means we could not determine presence, which is recorded
+	// as Unknown + a scan warning rather than silently reported as Missing.
+	var indeterminateErr error
+	for _, path := range []string{defaultDependabotPath, ".github/dependabot.yaml"} {
 		if dbg != nil {
-			dbg(repoFull, "dependabot.yml not found — trying dependabot.yaml")
+			dbg(repoFull, "GET /repos/"+repoFull+"/contents/"+path)
 		}
-		fileContent, _, _, err = c.client.Repositories.GetContents(ctx, owner, repo, ".github/dependabot.yaml", nil)
+		fileContent, _, _, err := c.client.Repositories.GetContents(ctx, owner, repo, path, nil)
 		if err == nil {
-			facts.Path = ".github/dependabot.yaml"
+			facts.Path = path
 			if dbg != nil {
-				dbg(repoFull, "found dependabot config at .github/dependabot.yaml")
+				dbg(repoFull, "found dependabot config at "+path)
 			}
+			parseDependabotContent(&facts, fileContent, dbg, repoFull)
+			return facts
 		}
-	} else if dbg != nil {
-		dbg(repoFull, "found dependabot config at .github/dependabot.yml")
-	}
-
-	if err != nil {
-		facts.Missing = true
+		if indeterminate(err) {
+			indeterminateErr = err
+		}
 		if dbg != nil {
-			dbg(repoFull, "no dependabot config found — missing=true")
+			dbg(repoFull, "dependabot config not found at "+path)
 		}
-	} else {
-		parseDependabotContent(&facts, fileContent, dbg, repoFull)
 	}
 
+	if indeterminateErr != nil {
+		facts.Unknown = true
+		c.addWarning("dependabot config", describeFetchError(indeterminateErr))
+		if dbg != nil {
+			dbg(repoFull, "dependabot config could not be determined: "+describeFetchError(indeterminateErr))
+		}
+		return facts
+	}
+
+	facts.Missing = true
+	if dbg != nil {
+		dbg(repoFull, "no dependabot config found — missing=true")
+	}
 	return facts
 }
 
@@ -164,12 +175,19 @@ func (c *factCollector) collectRenovateFacts(ctx context.Context, owner, repo st
 		HasWorkflows: hasWorkflows,
 	}
 
+	var indeterminateErr error
 	for _, path := range renovateConfigPaths {
 		if dbg != nil {
 			dbg(repoFull, "GET /repos/"+repoFull+"/contents/"+path)
 		}
 		fileContent, _, _, err := c.client.Repositories.GetContents(ctx, owner, repo, path, nil)
 		if err != nil {
+			// Keep probing the remaining paths even after an indeterminate
+			// error: a later path may still locate the config. Only if none is
+			// found do we fall back to Unknown below.
+			if indeterminate(err) {
+				indeterminateErr = err
+			}
 			if dbg != nil {
 				dbg(repoFull, "renovate config not found at "+path)
 			}
@@ -205,6 +223,15 @@ func (c *factCollector) collectRenovateFacts(ctx context.Context, owner, repo st
 				dbg(repoFull, fmt.Sprintf("renovate config parsed: covers-actions=%v pin-digests=%v cooldown=%v extends=%v",
 					coversActions, pinned, hasCooldown, config.Extends))
 			}
+		}
+		return facts
+	}
+
+	if indeterminateErr != nil {
+		facts.Unknown = true
+		c.addWarning("renovate config", describeFetchError(indeterminateErr))
+		if dbg != nil {
+			dbg(repoFull, "renovate config could not be determined: "+describeFetchError(indeterminateErr))
 		}
 		return facts
 	}

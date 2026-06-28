@@ -100,11 +100,32 @@ func (t *retryTransport) roundTrip(req *http.Request) (*http.Response, error) {
 }
 
 // releaseOnClose releases the in-flight semaphore slot when the wrapped response
-// body is closed, so the concurrency cap covers the full request lifetime rather
-// than ending when RoundTrip returns at the response headers.
+// body is fully read (EOF) or closed, whichever happens first, so the concurrency
+// cap covers the full request lifetime rather than ending when RoundTrip returns
+// at the response headers.
+//
+// Releasing on EOF — not just Close — is required because go-github's
+// CheckResponse drains error responses (404, 422, rate limits, …) with
+// io.ReadAll and then REPLACES resp.Body with an io.NopCloser so callers can
+// re-read the error payload. The deferred Close in go-github's bareDo therefore
+// closes that NopCloser, never this wrapper, so a Close-only release would leak
+// a slot on every error response. Reading to EOF still flows through this
+// wrapper's Read, so that path releases the slot. release is idempotent (guarded
+// by a sync.Once in RoundTrip), so firing on both EOF and a later Close is safe.
 type releaseOnClose struct {
 	io.ReadCloser
 	release func()
+}
+
+func (r *releaseOnClose) Read(p []byte) (int, error) {
+	n, err := r.ReadCloser.Read(p)
+	if err != nil {
+		// Per the io.Reader contract a non-nil error (io.EOF or a terminal read
+		// error) means the body is done streaming; release the slot now in case
+		// the caller never calls Close on this wrapper.
+		r.release()
+	}
+	return n, err
 }
 
 func (r *releaseOnClose) Close() error {

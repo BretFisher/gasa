@@ -63,6 +63,7 @@ const (
 
 	// Error messages
 	errMsgRepoNotFound = "Repository not found or is private"
+	errMsgTimedOut     = "Timed out before GitHub responded (raise --timeout, or lower --concurrency if scanning many repos at once)"
 )
 
 // Scanner performs security checks on GitHub repositories
@@ -152,6 +153,10 @@ func (s *Scanner) ScanRepoWithOptions(ctx context.Context, owner, repo string, o
 	collector := &factCollector{client: s.client, authenticated: s.authenticated}
 	facts := collector.collectFacts(ctx, owner, repo, repository, opts.Config, dbg)
 
+	// Surface any checks that could not be completed so a partial scan is never
+	// mistaken for a clean one.
+	result.Incomplete = formatFactWarnings(facts.Incomplete)
+
 	rules, err := resolveRules(opts.RuleNames, opts.Categories, opts.Severities, opts.Config)
 	if err != nil {
 		return nil, err
@@ -193,6 +198,20 @@ func (s *Scanner) ScanRepoWithOptions(ctx context.Context, owner, repo string, o
 }
 
 func classifyGitHubRepoAccessError(err error) string {
+	// Context errors are checked first and explicitly. A per-repo deadline (or a
+	// user Ctrl-C) cancels the in-flight GitHub call, which bubbles up as a bare
+	// context error — go-github collapses it to ctx.Err() in bareDo, so by the
+	// time it reaches here it carries no transport detail. Without these cases it
+	// falls through to the generic "Failed to access repository: context deadline
+	// exceeded", which reads like a bug rather than a tunable limit. errors.Is
+	// unwraps any *url.Error wrapper net/http may have added.
+	if errors.Is(err, context.Canceled) {
+		return "Canceled before GitHub responded"
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return errMsgTimedOut
+	}
+
 	var rateLimitErr *github.RateLimitError
 	if errors.As(err, &rateLimitErr) {
 		return rateLimitMsg

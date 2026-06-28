@@ -2,12 +2,17 @@ package scanner
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/google/go-github/v84/github"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -225,6 +230,59 @@ func TestRetryTransportHoldsSlotUntilBodyClose(t *testing.T) {
 	case transport.sem <- struct{}{}:
 		t.Fatal("slot released more than once")
 	default:
+	}
+}
+
+// TestRetryTransportReleasesSlotOnErrorResponse is a regression test for a
+// semaphore-slot leak on error responses. go-github's CheckResponse drains an
+// error body (404, 422, rate limits, …) with io.ReadAll and then REPLACES
+// resp.Body with an io.NopCloser so the error payload can be re-read. The
+// deferred Close in go-github's bareDo therefore closes that NopCloser, never
+// our releaseOnClose wrapper — so releasing the in-flight slot on Close alone
+// leaks one slot per error response. The renovate collector probes ~9 missing
+// config paths (all 404), exhausts the cap, and every later request blocks on
+// acquire until the per-repo context deadline ("context deadline exceeded").
+//
+// With a cap of 2 and more error responses than the cap, a leak deadlocks: once
+// both slots leak, the next acquire blocks until its context deadline. The fix
+// also releases on EOF, which go-github's ReadAll triggers, so this completes.
+func TestRetryTransportReleasesSlotOnErrorResponse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		if _, err := io.WriteString(w, `{"message":"Not Found"}`); err != nil {
+			t.Errorf("writing response body: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	transport := &retryTransport{
+		base:        http.DefaultTransport,
+		maxAttempts: defaultRetryMaxAttempts,
+		baseDelay:   time.Nanosecond,
+		now:         time.Now,
+		sleep:       sleepWithContext,
+		sem:         make(chan struct{}, 2),
+	}
+	client := github.NewClient(&http.Client{Transport: transport})
+	base, err := url.Parse(srv.URL + "/")
+	if err != nil {
+		t.Fatalf("url.Parse() error = %v", err)
+	}
+	client.BaseURL = base
+
+	// More requests than the slot cap. A per-call deadline turns a regression
+	// into a deterministic, fast failure rather than a hung test.
+	for i := 0; i < 5; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		_, _, _, err := client.Repositories.GetContents(ctx, "owner", "repo", "renovate.json", nil)
+		cancel()
+		if errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("request %d blocked on the in-flight semaphore (leaked slot): %v", i+1, err)
+		}
+		var ghErr *github.ErrorResponse
+		if !errors.As(err, &ghErr) || ghErr.Response.StatusCode != http.StatusNotFound {
+			t.Fatalf("request %d error = %v, want 404 ErrorResponse", i+1, err)
+		}
 	}
 }
 

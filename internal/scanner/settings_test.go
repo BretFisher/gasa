@@ -5,7 +5,86 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/google/go-github/v84/github"
 )
+
+func TestIsAccessDenied(t *testing.T) {
+	resp := func(status int, rateLimited bool) *github.Response {
+		h := http.Header{}
+		if rateLimited {
+			h.Set("X-RateLimit-Remaining", "0")
+		}
+		return &github.Response{Response: &http.Response{StatusCode: status, Header: h}}
+	}
+	tests := []struct {
+		name string
+		resp *github.Response
+		want bool
+	}{
+		{"nil response (transport error)", nil, false},
+		{"404 not found", resp(http.StatusNotFound, false), true},
+		{"403 permissions", resp(http.StatusForbidden, false), true},
+		{"403 primary rate limit", resp(http.StatusForbidden, true), false},
+		{"429 too many requests", resp(http.StatusTooManyRequests, false), false},
+		{"500 server error", resp(http.StatusInternalServerError, false), false},
+		{"200 ok", resp(http.StatusOK, false), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isAccessDenied(tt.resp); got != tt.want {
+				t.Fatalf("isAccessDenied() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// A permissions denial (403) is surfaced as an actionable AccessFinding and must
+// NOT also be counted as an incomplete check — otherwise every under-scoped scan
+// would carry a noisy, misleading warning. The remediation must name the exact
+// scope/permission for each token type so the user can fix it without guessing.
+func TestCollectActionsSettings_PermissionDeniedGivesActionableFinding(t *testing.T) {
+	s, mux := newTestScanner(t, true)
+	mux.HandleFunc("/repos/owner/repo/actions/permissions", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	})
+
+	collector := newTestFactCollector(s)
+	facts := collector.collectActionsSettingsFacts(context.Background(), "owner", "repo", nil)
+
+	if facts.AccessFinding == nil {
+		t.Fatalf("expected an AccessFinding for denied settings")
+	}
+	if facts.AccessFinding.ID != findingIDSettingsCheckFailed {
+		t.Fatalf("AccessFinding.ID = %q, want %q", facts.AccessFinding.ID, findingIDSettingsCheckFailed)
+	}
+	// The remediation must be specific enough to act on without guessing.
+	for _, want := range []string{"repo", "Administration", "gh auth refresh", "SSO"} {
+		if !strings.Contains(facts.AccessFinding.Remediation, want) {
+			t.Errorf("remediation missing actionable detail %q:\n%s", want, facts.AccessFinding.Remediation)
+		}
+	}
+	if len(collector.warnings) != 0 {
+		t.Fatalf("permission denial must not produce incomplete warnings, got %+v", collector.warnings)
+	}
+}
+
+// A transient failure (5xx) IS indeterminate: it must warn (so the partial scan
+// is visible) and must NOT masquerade as a permissions problem.
+func TestCollectActionsSettings_TransientErrorIsIncompleteNotDenial(t *testing.T) {
+	s, mux := newTestScanner(t, true)
+	handle500(mux, "/repos/owner/repo/actions/permissions")
+
+	collector := newTestFactCollector(s)
+	facts := collector.collectActionsSettingsFacts(context.Background(), "owner", "repo", nil)
+
+	if len(collector.warnings) != 1 || collector.warnings[0].Area != "actions settings" {
+		t.Fatalf("transient settings error should warn once, got %+v", collector.warnings)
+	}
+	if facts.AccessFinding != nil {
+		t.Fatalf("transient error must not produce a permissions AccessFinding, got %+v", facts.AccessFinding)
+	}
+}
 
 func TestEvaluateActionsSettings_AllActionsAllowed(t *testing.T) {
 	s, mux := newTestScanner(t, true)
@@ -182,6 +261,94 @@ func TestEvaluateForkPRApprovalPolicy_ForbiddenSkips(t *testing.T) {
 	findings := collectAndEvaluateActionsSettings(t, s)
 	if len(findings) != 0 {
 		t.Fatalf("findings = %+v", findings)
+	}
+}
+
+// A 404 on the main settings call (GitHub hides repos you can't admin behind a
+// 404, not just 403) must be treated identically to a 403 denial.
+func TestCollectActionsSettings_NotFoundTreatedAsDenial(t *testing.T) {
+	s, mux := newTestScanner(t, true)
+	handle404(mux, "/repos/owner/repo/actions/permissions")
+
+	collector := newTestFactCollector(s)
+	facts := collector.collectActionsSettingsFacts(context.Background(), "owner", "repo", nil)
+
+	if facts.AccessFinding == nil || facts.AccessFinding.ID != findingIDSettingsCheckFailed {
+		t.Fatalf("AccessFinding = %+v, want %q", facts.AccessFinding, findingIDSettingsCheckFailed)
+	}
+	if len(collector.warnings) != 0 {
+		t.Fatalf("a 404 denial must not warn, got %+v", collector.warnings)
+	}
+}
+
+// The unauthenticated finding must tell the user how to authenticate.
+func TestCollectActionsSettings_UnauthenticatedRemediationIsActionable(t *testing.T) {
+	s, mux := newTestScanner(t, false)
+	handle404(mux, "/repos/owner/repo/actions/permissions")
+
+	facts := newTestFactCollector(s).collectActionsSettingsFacts(context.Background(), "owner", "repo", nil)
+
+	if facts.AccessFinding == nil || facts.AccessFinding.ID != findingIDSettingsCheckUnavailable {
+		t.Fatalf("AccessFinding = %+v, want %q", facts.AccessFinding, findingIDSettingsCheckUnavailable)
+	}
+	for _, want := range []string{"GITHUB_TOKEN", "--token-stdin", "gh auth login"} {
+		if !strings.Contains(facts.AccessFinding.Remediation, want) {
+			t.Errorf("unauthenticated remediation missing %q:\n%s", want, facts.AccessFinding.Remediation)
+		}
+	}
+}
+
+// The two authenticated sub-calls (default workflow permissions, fork-PR
+// approval) each warn when they fail transiently — so a partial settings read
+// is never silently dropped.
+func TestFetchAuthenticatedSettings_TransientErrorsWarn(t *testing.T) {
+	s, mux := newTestScanner(t, true)
+	handleJSON(mux, "/repos/owner/repo/actions/permissions", map[string]any{"enabled": true, "allowed_actions": "selected"})
+	handle500(mux,
+		"/repos/owner/repo/actions/permissions/workflow",
+		"/repos/owner/repo/actions/permissions/fork-pr-contributor-approval",
+	)
+
+	collector := newTestFactCollector(s)
+	facts := collector.collectActionsSettingsFacts(context.Background(), "owner", "repo", nil)
+
+	if facts.AccessFinding != nil {
+		t.Fatalf("main call succeeded; no AccessFinding expected, got %+v", facts.AccessFinding)
+	}
+	if facts.DefaultWorkflowPermissions != nil || facts.ForkPRContributorApproval != nil {
+		t.Fatalf("sub-call values should be unset on error")
+	}
+	gotAreas := map[string]bool{}
+	for _, w := range collector.warnings {
+		gotAreas[w.Area] = true
+	}
+	for _, want := range []string{"workflow default permissions", "fork-PR contributor approval"} {
+		if !gotAreas[want] {
+			t.Errorf("missing transient warning for %q; warnings=%+v", want, collector.warnings)
+		}
+	}
+}
+
+// A 403/404 on the sub-calls is a determinate denial: skipped, with neither a
+// finding nor an incomplete warning (the main settings finding already explains
+// the missing permission). This covers the default-workflow-permissions skip
+// branch that the fork-PR test does not.
+func TestFetchAuthenticatedSettings_DeniedSkipsQuietly(t *testing.T) {
+	s, mux := newTestScanner(t, true)
+	handleJSON(mux, "/repos/owner/repo/actions/permissions", map[string]any{"enabled": true, "allowed_actions": "selected"})
+	mux.HandleFunc("/repos/owner/repo/actions/permissions/workflow", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	})
+	handle404(mux, "/repos/owner/repo/actions/permissions/fork-pr-contributor-approval")
+
+	collector := newTestFactCollector(s)
+	facts := collector.collectActionsSettingsFacts(context.Background(), "owner", "repo", nil)
+
+	if len(collector.warnings) != 0 {
+		t.Fatalf("denied sub-calls must not warn, got %+v", collector.warnings)
+	}
+	if facts.DefaultWorkflowPermissions != nil || facts.ForkPRContributorApproval != nil {
+		t.Fatalf("denied sub-call values should be unset")
 	}
 }
 

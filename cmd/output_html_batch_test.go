@@ -189,6 +189,58 @@ func TestPrintBatchJSONStdout(t *testing.T) {
 	}
 }
 
+// Incomplete checks must be visible in every output mode so a partial scan is
+// never mistaken for a clean one.
+func TestPrintTable_ShowsIncomplete(t *testing.T) {
+	result := &scanner.ScanResult{
+		RepoFullName: "owner/repo",
+		Incomplete:   []string{"renovate config: timed out before GitHub responded (raise --timeout)"},
+	}
+	out := captureStdout(t, func() { printTable(result) })
+	for _, want := range []string{"Incomplete:", "renovate config", "timed out"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("table output missing %q\noutput:\n%s", want, out)
+		}
+	}
+}
+
+func TestPrintHTML_ShowsIncomplete(t *testing.T) {
+	result := &scanner.ScanResult{
+		RepoFullName: "owner/repo",
+		Incomplete:   []string{"workflows: GitHub secondary rate limit triggered"},
+	}
+	out := captureStdout(t, func() {
+		if err := printHTML(result); err != nil {
+			t.Fatalf("printHTML() error = %v", err)
+		}
+	})
+	for _, want := range []string{`class="card incomplete"`, "could not be completed", "secondary rate limit"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("HTML output missing %q", want)
+		}
+	}
+}
+
+func TestBatchHTML_ShowsIncomplete(t *testing.T) {
+	results := []batchRepoResult{
+		{RepoFullName: "o/partial", Result: &scanner.ScanResult{
+			RepoFullName: "o/partial",
+			Incomplete:   []string{"dependabot config: GitHub returned HTTP 502"},
+		}},
+	}
+	view := buildBatchView(results)
+	var buf bytes.Buffer
+	if err := renderHTMLTemplate(&buf, htmlBatchTemplate, view); err != nil {
+		t.Fatalf("renderHTMLTemplate() error: %v", err)
+	}
+	html := buf.String()
+	for _, want := range []string{`class="card incomplete"`, "dependabot config", "HTTP 502"} {
+		if !strings.Contains(html, want) {
+			t.Errorf("batch HTML missing %q", want)
+		}
+	}
+}
+
 func TestBuildBatchViewStateCounts(t *testing.T) {
 	results := []batchRepoResult{
 		{RepoFullName: "o/clean", Result: &scanner.ScanResult{}},

@@ -111,6 +111,21 @@ func printFindingTable(f scanner.Finding, width int) {
 	printLipglossLine(t.Render())
 }
 
+// printIncompleteTable prints a prominent warning block listing checks that
+// could not be completed, so a partial scan is never read as clean. No-op when
+// the scan was complete.
+func printIncompleteTable(result *scanner.ScanResult) {
+	if len(result.Incomplete) == 0 {
+		return
+	}
+	style := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Yellow)
+	printLipglossLine(style.Render(fmt.Sprintf(
+		"Incomplete: %d check(s) could not be completed — findings may be partial", len(result.Incomplete))))
+	for _, w := range result.Incomplete {
+		fmt.Printf("  - %s\n", w)
+	}
+}
+
 func printLipglossLine(s string) {
 	if _, err := lipgloss.Println(s); err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing terminal output: %v\n", err)
@@ -148,6 +163,7 @@ func printTable(result *scanner.ScanResult) {
 	if successes := result.CountSuccesses(); successes > 0 {
 		fmt.Printf("Successes:  %d\n", successes)
 	}
+	printIncompleteTable(result)
 	fmt.Println()
 
 	for i, f := range result.Findings {

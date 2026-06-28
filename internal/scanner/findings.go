@@ -39,6 +39,11 @@ type ScanResult struct {
 	Findings     []Finding `json:"findings"`
 	ScannedAt    string    `json:"scanned_at"`
 	Error        string    `json:"error,omitempty"`
+	// Incomplete lists checks that could not be completed (e.g. a timeout or
+	// rate limit while fetching a config). A non-empty slice means the findings
+	// are partial — the scan must not be read as a clean bill of health. Each
+	// entry is "<area>: <cause>".
+	Incomplete []string `json:"incomplete,omitempty"`
 }
 
 // CountBySeverity returns counts for each severity level

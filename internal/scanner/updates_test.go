@@ -219,6 +219,128 @@ func TestCollectRenovateFacts_DebugLogsKeyDecisions(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Incomplete-scan reporting: indeterminate errors must not look like "absent"
+// ---------------------------------------------------------------------------
+
+func TestCollectRenovateFacts_IndeterminateErrorMarksUnknown(t *testing.T) {
+	s, mux := newTestScanner(t, false)
+	handle500(mux, renovateServerPaths()...)
+
+	collector := newTestFactCollector(s)
+	facts := collector.collectRenovateFacts(context.Background(), "owner", "repo", true, nil)
+
+	if facts.Missing {
+		t.Fatalf("Missing = true; an indeterminate error must not be reported as absent")
+	}
+	if !facts.Unknown {
+		t.Fatalf("Unknown = false; want true on an indeterminate error")
+	}
+	if len(collector.warnings) != 1 || collector.warnings[0].Area != "renovate config" {
+		t.Fatalf("warnings = %+v, want one 'renovate config' warning", collector.warnings)
+	}
+}
+
+// A single indeterminate error must taint the "Missing" conclusion even when
+// every other path returns a clean 404 — we genuinely don't know about the one
+// path that failed.
+func TestCollectRenovateFacts_OneIndeterminatePathTaintsMissing(t *testing.T) {
+	s, mux := newTestScanner(t, false)
+	handle500(mux, "/repos/owner/repo/contents/renovate.json")
+	handle404(mux, renovateServerPaths()[1:]...)
+
+	collector := newTestFactCollector(s)
+	facts := collector.collectRenovateFacts(context.Background(), "owner", "repo", true, nil)
+
+	if facts.Missing || !facts.Unknown {
+		t.Fatalf("Missing=%v Unknown=%v, want Missing=false Unknown=true", facts.Missing, facts.Unknown)
+	}
+}
+
+func TestCollectRenovateFacts_AllNotFoundIsMissing(t *testing.T) {
+	s, mux := newTestScanner(t, false)
+	handle404(mux, renovateServerPaths()...)
+
+	collector := newTestFactCollector(s)
+	facts := collector.collectRenovateFacts(context.Background(), "owner", "repo", true, nil)
+
+	if !facts.Missing || facts.Unknown {
+		t.Fatalf("Missing=%v Unknown=%v, want Missing=true Unknown=false", facts.Missing, facts.Unknown)
+	}
+	if len(collector.warnings) != 0 {
+		t.Fatalf("warnings = %+v, want none for a clean all-404 result", collector.warnings)
+	}
+}
+
+func TestCollectDependabotFacts_IndeterminateErrorMarksUnknown(t *testing.T) {
+	s, mux := newTestScanner(t, false)
+	handle500(mux,
+		"/repos/owner/repo/contents/.github/dependabot.yml",
+		"/repos/owner/repo/contents/.github/dependabot.yaml",
+	)
+
+	collector := newTestFactCollector(s)
+	facts := collector.collectDependabotFacts(context.Background(), "owner", "repo", true, nil)
+
+	if facts.Missing || !facts.Unknown {
+		t.Fatalf("Missing=%v Unknown=%v, want Missing=false Unknown=true", facts.Missing, facts.Unknown)
+	}
+	if len(collector.warnings) != 1 || collector.warnings[0].Area != "dependabot config" {
+		t.Fatalf("warnings = %+v, want one 'dependabot config' warning", collector.warnings)
+	}
+}
+
+func TestCollectWorkflowFacts_IndeterminateDirErrorWarns(t *testing.T) {
+	s, mux := newTestScanner(t, false)
+	handle500(mux, "/repos/owner/repo/contents/.github/workflows")
+
+	collector := newTestFactCollector(s)
+	workflows := collector.collectWorkflowFacts(context.Background(), "owner", "repo", nil)
+
+	if len(workflows) != 0 {
+		t.Fatalf("workflows = %+v, want none", workflows)
+	}
+	if len(collector.warnings) != 1 || collector.warnings[0].Area != "workflows" {
+		t.Fatalf("warnings = %+v, want one 'workflows' warning", collector.warnings)
+	}
+}
+
+// When presence is unknown (an indeterminate fetch error), the rule must NOT
+// claim "no update tool" — that would be a false finding invented from a
+// transient failure. This is the concrete bug the Unknown/Missing split fixes.
+func TestEvaluateUpdateToolConfiguration_UnknownDoesNotReportNoTool(t *testing.T) {
+	facts := &ScanFacts{
+		Dependabot: DependabotFacts{Unknown: true, HasWorkflows: true},
+		Renovate:   RenovateFacts{Unknown: true, HasWorkflows: true},
+	}
+	if findings := evaluateUpdateToolConfigurationFacts(facts); len(findings) != 0 {
+		t.Fatalf("findings = %+v, want none when tool presence is unknown", findings)
+	}
+}
+
+// Contrast: when both tools are definitively absent (clean 404s), the no-tool
+// finding still fires. Guards against the fix over-suppressing real findings.
+func TestEvaluateUpdateToolConfiguration_BothMissingReportsNoTool(t *testing.T) {
+	facts := &ScanFacts{
+		Dependabot: DependabotFacts{Missing: true, HasWorkflows: true},
+		Renovate:   RenovateFacts{Missing: true, HasWorkflows: true},
+	}
+	findings := evaluateUpdateToolConfigurationFacts(facts)
+	if len(findings) != 1 || findings[0].ID != findingIDNoUpdateTool {
+		t.Fatalf("findings = %+v, want one %q finding", findings, findingIDNoUpdateTool)
+	}
+}
+
+// renovateServerPaths returns the API server paths for every renovate config
+// location, derived from the production path list so the two never drift.
+func renovateServerPaths() []string {
+	paths := make([]string, len(renovateConfigPaths))
+	for i, p := range renovateConfigPaths {
+		paths[i] = "/repos/owner/repo/contents/" + p
+	}
+	return paths
+}
+
+// ---------------------------------------------------------------------------
 // update-tool-actions-cooldown: Dependabot
 // ---------------------------------------------------------------------------
 
