@@ -34,12 +34,6 @@ messages:
 
 # Renovate GitHub Actions Pinning
 
-| | |
-|---|---|
-| **Severity** | Medium |
-| **Rule name** | `updates/update-tool-actions-pinning` |
-| **Aliases** | `update-tool-actions-pinning`, `actions-pinning` |
-
 ## What it checks
 
 Whether Renovate's config is configured to pin GitHub Action references to

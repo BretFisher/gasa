@@ -30,14 +30,6 @@ messages:
 
 # Actions Can Approve Pull Requests
 
-| | |
-|---|---|
-| **Severity** | Medium |
-| **Check ID** | `actions_settings` |
-| **Auth required** | Yes |
-| **Minimum fine-grained permission** | `Administration: Read` |
-| **Classic PAT** | `repo` |
-
 ## What it checks
 
 Whether GitHub Actions is allowed to create and approve pull request reviews.

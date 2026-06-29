@@ -52,12 +52,6 @@ messages:
 
 # Update Tool Configuration
 
-| | |
-|---|---|
-| **Severity** | Medium |
-| **Rule name** | `updates/update-tool-configuration` |
-| **Aliases** | `update-tool-configuration`, `update-tool` |
-
 ## What it checks
 
 - whether `.github/dependabot.yml` / `.github/dependabot.yaml` (Dependabot) or any supported Renovate config file exists

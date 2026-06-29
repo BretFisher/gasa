@@ -28,11 +28,6 @@ messages:
 
 # Pull Request Target
 
-| | |
-|---|---|
-| **Severity** | Critical |
-| **Check ID** | `pull_request_target` |
-
 ## What it checks
 
 Whether any workflow in `.github/workflows/*.yml` or `.github/workflows/*.yaml` uses the `pull_request_target` event.

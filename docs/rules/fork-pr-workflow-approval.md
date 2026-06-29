@@ -32,14 +32,6 @@ messages:
 
 # Fork PR Workflow Approval
 
-| | |
-|---|---|
-| **Severity** | High |
-| **Check ID** | `actions_settings` |
-| **Auth required** | Yes |
-| **Minimum fine-grained permission** | `Administration: Read` |
-| **Classic PAT** | `repo` |
-
 ## What it checks
 
 Whether the public-repo setting `Approval for running fork pull request workflows from contributors` is set to `all_external_contributors`.

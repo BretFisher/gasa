@@ -10,9 +10,9 @@ messages:
   unpinned:
     title: "Unpinned Action: {{.Action}}"
     description: >-
-      This action uses a mutable reference '{{.Ref}}'. Tags and branches can be
+      This action uses a mutable reference `{{.Ref}}`. Tags and branches can be
       moved, potentially introducing malicious code.
-    fix: Pin to a specific commit SHA instead of '{{.Ref}}'.
+    fix: Pin to a specific commit SHA instead of `{{.Ref}}`.
   pass:
     title: Action versions are pinned safely
     description: >-
@@ -21,11 +21,6 @@ messages:
 ---
 
 # Action Version Pinning
-
-| | |
-|---|---|
-| **Severity** | High |
-| **Check ID** | `action_pinning` |
 
 ## What it checks
 

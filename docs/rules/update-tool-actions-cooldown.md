@@ -32,12 +32,6 @@ messages:
 
 # Update Tool GitHub Actions Cooldown
 
-| | |
-|---|---|
-| **Severity** | Low |
-| **Rule name** | `updates/update-tool-actions-cooldown` |
-| **Aliases** | `update-tool-actions-cooldown`, `actions-cooldown` |
-
 ## What it checks
 
 - whether Dependabot's `github-actions` entry defines a `cooldown` block, **or**

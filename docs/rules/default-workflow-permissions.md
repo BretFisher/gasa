@@ -34,14 +34,6 @@ messages:
 
 # Default Workflow Permissions
 
-| | |
-|---|---|
-| **Severity** | High |
-| **Check ID** | `actions_settings` |
-| **Auth required** | Yes |
-| **Minimum fine-grained permission** | `Administration: Read` |
-| **Classic PAT** | `repo` |
-
 ## What it checks
 
 Whether the repository default `GITHUB_TOKEN` permission level is `read` or `write`.
