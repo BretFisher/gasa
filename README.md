@@ -13,9 +13,9 @@ read-only admin access.
 
 **You can scan single repositories or entire users and orgs.** You can control which rules it runs and the type of output (table, json, or html). Rules have docs and remediation help.
 
-You can use it as a downloadable CLI or a container. It can do a partical check on a 3rd-party public repository, but for a full settings check it'll need at least read-only admin access, which if your local `gh` cli is logged in, it'll use that to check your repository settings.
+You can use it as a downloadable CLI or a container. It can do a partial check on a 3rd-party public repository, but for a full settings check it'll need at least read-only admin access, which if your local `gh` cli is logged in, it'll use that to check your repository settings.
 
-**Gasa is only concerned with GitHub Actions security best practices, and goes beyond the workflow yaml to help repo owners, partically open source maintainers, validate that their workflows, settings, and Dependabot/Renovate configs are providing a safe Actions environment.
+**Gasa is only concerned with GitHub Actions security best practices, and goes beyond the workflow yaml to help repo owners, particularly open source maintainers, validate that their workflows, settings, and Dependabot/Renovate configs are providing a safe Actions environment.
 
 > [!WARNING]
 > **Don't run `gasa` as a GitHub Actions workflow on a public repo** — the admin settings findings report would be public, which is likely the last thing you want for a security report. A future feature will report findings to the GitHub Security tab to keep them private.
