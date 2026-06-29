@@ -69,6 +69,47 @@ func successStyle() lipgloss.Style {
 	return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Green)
 }
 
+// inlineCodeStyle colours Markdown `code` spans in the terminal. Magenta is used
+// because the severity palette already claims red/yellow/cyan/green, so code
+// reads as distinct from a severity colour. ANSI named colours map to the user's
+// own terminal theme, so this stays legible on light and dark backgrounds.
+var inlineCodeStyle = lipgloss.NewStyle().Foreground(lipgloss.Magenta)
+
+// styleInlineCode renders the small Markdown subset our rule copy uses — inline
+// `code` spans and ```fenced``` blocks — for the terminal: it strips the
+// backticks and recolours the code so it stands out in the findings table.
+// Non-code text is returned unchanged. It mirrors markdownCodeToHTML so the two
+// output formats treat the same source identically.
+func styleInlineCode(s string) string {
+	var b strings.Builder
+	for len(s) > 0 {
+		switch {
+		case strings.HasPrefix(s, "```"):
+			_, rest, _ := strings.Cut(s[3:], "\n")
+			code, after, _ := strings.Cut(rest, "```")
+			b.WriteString(inlineCodeStyle.Render(strings.Trim(code, "\n")))
+			s = after
+		case strings.HasPrefix(s, "`"):
+			if code, after, found := strings.Cut(s[1:], "`"); found {
+				b.WriteString(inlineCodeStyle.Render(code))
+				s = after
+			} else {
+				b.WriteString("`") // unmatched backtick: emit literally
+				s = s[1:]
+			}
+		default:
+			if before, after, found := strings.Cut(s, "`"); found {
+				b.WriteString(before)
+				s = "`" + after
+			} else {
+				b.WriteString(s)
+				s = ""
+			}
+		}
+	}
+	return b.String()
+}
+
 func printFindingTable(f scanner.Finding, width int) {
 	titleText := f.Title
 	style := severityStyle(f.Severity)
@@ -84,10 +125,10 @@ func printFindingTable(f scanner.Finding, width int) {
 	rows := [][]string{
 		{labelRule, f.Rule},
 		{labelCategory, f.Category},
-		{labelDescription, f.Description},
+		{labelDescription, styleInlineCode(f.Description)},
 	}
 	if !f.Success {
-		rows = append(rows, []string{labelFix, f.Remediation})
+		rows = append(rows, []string{labelFix, styleInlineCode(f.Remediation)})
 	}
 	if f.FixURL != "" {
 		rows = append(rows, []string{labelFixURL, f.FixURL})

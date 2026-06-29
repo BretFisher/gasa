@@ -12,7 +12,54 @@ import (
 
 type htmlFindingRow struct {
 	Label string
-	Value string
+	Value template.HTML
+}
+
+// markdownCodeToHTML converts the small subset of Markdown our rule copy uses —
+// inline `code` spans and ```fenced``` blocks — into <code>/<pre><code> HTML,
+// HTML-escaping every other character (and the code content itself). It is
+// deliberately not a full Markdown parser: rule messages only ever use these two
+// constructs, so a tiny hand-rolled converter is safer and dependency-free.
+// Returning template.HTML tells html/template the result is already escaped.
+func markdownCodeToHTML(s string) template.HTML {
+	var b strings.Builder
+	for len(s) > 0 {
+		switch {
+		case strings.HasPrefix(s, "```"):
+			// Drop an optional language token on the opening fence line, then take
+			// everything up to the closing fence.
+			_, rest, _ := strings.Cut(s[3:], "\n")
+			code, after, _ := strings.Cut(rest, "```")
+			b.WriteString("<pre><code>")
+			b.WriteString(template.HTMLEscapeString(strings.Trim(code, "\n")))
+			b.WriteString("</code></pre>")
+			s = after
+		case strings.HasPrefix(s, "`"):
+			if code, after, found := strings.Cut(s[1:], "`"); found {
+				b.WriteString("<code>")
+				b.WriteString(template.HTMLEscapeString(code))
+				b.WriteString("</code>")
+				s = after
+			} else {
+				b.WriteString("`") // unmatched backtick: emit literally
+				s = s[1:]
+			}
+		default:
+			// Emit text up to the next backtick, HTML-escaped.
+			if before, after, found := strings.Cut(s, "`"); found {
+				b.WriteString(template.HTMLEscapeString(before))
+				s = "`" + after
+			} else {
+				b.WriteString(template.HTMLEscapeString(s))
+				s = ""
+			}
+		}
+	}
+	// Safe despite G203: every dynamic segment — surrounding text AND the code
+	// content — is run through template.HTMLEscapeString above; the only literal
+	// HTML written is our own fixed <code>/<pre> tags. No attacker-controlled
+	// input reaches the output unescaped, so this is not an XSS sink.
+	return template.HTML(b.String()) //nolint:gosec // G203: all dynamic content is escaped above; only fixed tags are injected
 }
 
 type htmlFindingView struct {
@@ -43,7 +90,7 @@ type htmlRuleView struct {
 	Title         string
 	Rule          string
 	Category      string
-	Description   string
+	Description   template.HTML
 	Severity      string
 	SeverityClass string
 	Aliases       string
@@ -63,12 +110,12 @@ func printHTML(result *scanner.ScanResult) error {
 
 	for _, finding := range result.Findings {
 		rows := []htmlFindingRow{
-			{Label: labelRule, Value: finding.Rule},
-			{Label: labelCategory, Value: finding.Category},
-			{Label: labelDescription, Value: finding.Description},
+			{Label: labelRule, Value: markdownCodeToHTML(finding.Rule)},
+			{Label: labelCategory, Value: markdownCodeToHTML(finding.Category)},
+			{Label: labelDescription, Value: markdownCodeToHTML(finding.Description)},
 		}
 		if !finding.Success {
-			rows = append(rows, htmlFindingRow{Label: labelFix, Value: finding.Remediation})
+			rows = append(rows, htmlFindingRow{Label: labelFix, Value: markdownCodeToHTML(finding.Remediation)})
 		}
 
 		view.Findings = append(view.Findings, htmlFindingView{
@@ -103,7 +150,7 @@ func printRulesHTML() error {
 			Title:         rule.Title,
 			Rule:          rule.Name,
 			Category:      rule.Category,
-			Description:   rule.Description,
+			Description:   markdownCodeToHTML(rule.Description),
 			Severity:      rule.Severity,
 			SeverityClass: severityClass(scanner.Finding{Severity: rule.Severity}),
 			Aliases:       aliases,
@@ -264,6 +311,9 @@ th { width: 10rem; font-weight: 700; color: var(--th-fg); }
 td { white-space: pre-wrap; word-break: break-word; }
 a { color: var(--link); text-decoration: none; }
 a:hover { text-decoration: underline; }
+code { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; font-size: 0.88em; background: var(--badge-bg); padding: 0.12em 0.34em; border-radius: 6px; }
+pre { background: var(--badge-bg); border: 1px solid var(--card-border); border-radius: 8px; padding: 0.85rem 1rem; margin: 0.5rem 0; overflow-x: auto; }
+pre code { background: none; padding: 0; font-size: 0.85em; line-height: 1.45; }
 @media print { body { background: #fff; color: #16181d; padding: 0; } .card { box-shadow: none; break-inside: avoid; } }
 `
 

@@ -98,12 +98,12 @@ func buildBatchView(results []batchRepoResult) htmlBatchView {
 		case r.Result != nil:
 			for _, finding := range r.Result.Findings {
 				rows := []htmlFindingRow{
-					{Label: labelRule, Value: finding.Rule},
-					{Label: labelCategory, Value: finding.Category},
-					{Label: labelDescription, Value: finding.Description},
+					{Label: labelRule, Value: markdownCodeToHTML(finding.Rule)},
+					{Label: labelCategory, Value: markdownCodeToHTML(finding.Category)},
+					{Label: labelDescription, Value: markdownCodeToHTML(finding.Description)},
 				}
 				if !finding.Success {
-					rows = append(rows, htmlFindingRow{Label: labelFix, Value: finding.Remediation})
+					rows = append(rows, htmlFindingRow{Label: labelFix, Value: markdownCodeToHTML(finding.Remediation)})
 				}
 				entry.Findings = append(entry.Findings, htmlFindingView{
 					Title:         finding.Title,
