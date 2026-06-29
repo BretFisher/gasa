@@ -106,7 +106,7 @@ commit. Committing to a SHA ensures you get exactly the code that was reviewed.
 }
 ```
 
-**Renovate — packageRule scoped to github-actions:**
+**Renovate — packageRule scoped to GitHub Actions:**
 
 ```json
 {

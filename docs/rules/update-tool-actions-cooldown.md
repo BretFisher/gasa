@@ -103,7 +103,7 @@ updates:
 }
 ```
 
-**Renovate — scoped to github-actions via packageRules:**
+**Renovate — scoped to GitHub Actions via packageRules:**
 
 ```json
 {
