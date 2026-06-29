@@ -25,7 +25,6 @@ It focuses on:
 - risky repository-level Actions settings
 - missing or incomplete Dependabot configuration
 
-
 ## Product Naming
 
 - Human-readable name: **GitHub Actions Security Assessment**
@@ -113,20 +112,20 @@ The CLI currently checks these areas:
 
 ### Repository Settings
 
-4. **Allowed Actions Policy**
+1. **Allowed Actions Policy**
    - Detects repositories that allow all actions
-5. **Default Workflow Permissions**
+2. **Default Workflow Permissions**
    - Detects repo default `GITHUB_TOKEN` set to write
-6. **Actions Can Approve PRs**
+3. **Actions Can Approve PRs**
    - Detects Actions being allowed to approve pull requests
-7. **Fork PR Workflow Approval**
+4. **Fork PR Workflow Approval**
    - Detects less restrictive approval policies than `all_external_contributors`
 
 ### Updates
 
-8. **Dependabot Configuration**
+1. **Dependabot Configuration**
    - Detects missing config, invalid config, and missing `github-actions` coverage
-9. **Dependabot GitHub Actions Cooldown**
+2. **Dependabot GitHub Actions Cooldown**
    - Detects `github-actions` Dependabot update entries that do not set `cooldown`
 
 Detailed rule documentation lives in `docs/rules/`.
@@ -188,10 +187,26 @@ Canonical rule names are endpoint-style where helpful, and short aliases are sup
 
 - `make run` - show CLI help
 - `make build` - build `bin/gasa`
-- `make test` - run Go tests
+- `make test` - run Go tests (`-race -shuffle=on`)
+- `make lint` - golangci-lint
+- `make lint-md` - markdownlint (all `*.md`)
 - `make deps` - tidy modules
 - `make fmt` - format Go code
 - `make clean` - remove built artifacts
+
+---
+
+## Linting
+
+CI runs these via super-linter. After editing files of a given type, run the
+matching linter locally and fix all findings before finishing. Linter configs
+live in `.github/linters/` so local runs and CI share one source of truth.
+
+- **Go** (`*.go`): `make lint` (golangci-lint), plus `go vet ./...` and `gofmt`
+- **Markdown** (`*.md`): `make lint-md` (markdownlint)
+- **GitHub Actions workflows** (`.github/workflows/*.yml`): `actionlint`, `zizmor`, and `poutine`
+- **Dockerfiles**: `hadolint` (config `.github/linters/.hadolint.yaml`)
+- **IaC / misconfiguration**: `checkov` (config `.github/linters/.checkov.yaml`)
 
 ---
 
@@ -206,7 +221,8 @@ Canonical rule names are endpoint-style where helpful, and short aliases are sup
 
 ## Guidance For Future Changes
 
-- Always run `make build` and the relevant test command at the end of each task.
+- Always run `make build`, the relevant test command, and the linters for the
+  file types you touched (see [Linting](#linting)) at the end of each task.
 
 - Rule metadata (title, severity, category, aliases, order, description) and ALL
   human-facing report copy (finding titles, descriptions, fix advice, success

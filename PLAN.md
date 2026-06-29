@@ -460,7 +460,17 @@ Potential work later:
 
 Deferred tooling decisions:
 
-- `release-please` (googleapis/release-please-action): evaluated and deferred. It automates version bumping and CHANGELOG generation from Conventional Commits, then cuts the tag/release; GoReleaser would still build and publish artifacts on that tag (they are complementary, not redundant). Not adopted now because the project has a single committer, does not yet enforce Conventional Commits, and the current `workflow_dispatch` release with an explicit version input is simpler. Revisit when either a second regular contributor lands or Conventional Commits are enforced and hands-off versioning is wanted. Prerequisite before adoption is commit-message discipline, not the action itself. Coordinate release ownership so release-please and GoReleaser do not both try to create the GitHub Release.
+- `release-please` (googleapis/release-please-action): evaluated and deferred.
+  It automates version bumping and CHANGELOG generation from Conventional
+  Commits, then cuts the tag/release; GoReleaser would still build and publish
+  artifacts on that tag (they are complementary, not redundant). Not adopted now
+  because the project has a single committer, does not yet enforce Conventional
+  Commits, and the current `workflow_dispatch` release with an explicit version
+  input is simpler. Revisit when either a second regular contributor lands or
+  Conventional Commits are enforced and hands-off versioning is wanted.
+  Prerequisite before adoption is commit-message discipline, not the action
+  itself. Coordinate release ownership so release-please and GoReleaser do not
+  both try to create the GitHub Release.
 
 Guardrails:
 

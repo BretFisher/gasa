@@ -1,4 +1,4 @@
-.PHONY: run build clean test cover deps fmt vet lint
+.PHONY: run build clean test cover deps fmt vet lint lint-md
 
 # Run the CLI
 run:
@@ -40,3 +40,9 @@ vet:
 # Lint via golangci-lint (install: brew install golangci-lint)
 lint:
 	golangci-lint run -c .github/linters/.golangci.yaml ./...
+
+# Lint all Markdown (install: brew install markdownlint-cli)
+# Config filename matches super-linter's expected .markdown-lint.yml so CI and
+# this local run share one config.
+lint-md:
+	markdownlint '**/*.md' --ignore node_modules --config .github/linters/.markdown-lint.yml

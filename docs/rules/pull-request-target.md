@@ -49,7 +49,12 @@ This rule does not try to prove whether the workflow later checks out untrusted 
 
 ## Why this matters
 
-`pull_request_target` runs in the context of the base branch, not the pull request branch. That means it can access repository secrets and a more trusted token context. If the workflow then checks out or executes code from the pull request, an attacker can exfiltrate secrets or abuse repository access. For that reason, it should never be used in public repositories and is highly discouraged in private repositories.
+`pull_request_target` runs in the context of the base branch, not the pull
+request branch. That means it can access repository secrets and a more trusted
+token context. If the workflow then checks out or executes code from the pull
+request, an attacker can exfiltrate secrets or abuse repository access. For that
+reason, it should never be used in public repositories and is highly discouraged
+in private repositories.
 
 ## Bad example
 
