@@ -34,12 +34,12 @@ jobs:
 
     steps:
       - name: "Checkout code"
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: chainguard-actions/actions-checkout@5c571b05fb026b9251781bee09aadc0d09736c72 #v7.0.0
         with:
           persist-credentials: false
 
       - name: "Run analysis"
-        uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a # v2.4.3
+        uses: chainguard-actions/ossf-scorecard-action@2118dceabd9b18c5441bfc9fd0ed47ab9a0e2053 # v2.4.3
         with:
           results_file: results.sarif
           results_format: sarif
@@ -64,7 +64,7 @@ jobs:
       # Upload the results as artifacts (optional). Commenting out will disable uploads of run results in SARIF
       # format to the repository Actions tab.
       - name: "Upload artifact"
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: chainguard-actions/actions-upload-artifact@23adf72c36c7d4a9eb3cdd853df5f26073da1f98 # v7.0.1
         with:
           name: SARIF file
           path: results.sarif
