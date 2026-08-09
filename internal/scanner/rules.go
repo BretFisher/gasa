@@ -326,6 +326,11 @@ func successFinding(ruleName, severity, location, title, description string) *Fi
 func allowedActionsSuccessFinding(ruleName, severity string, facts *ScanFacts) *Finding {
 	permissions := facts.ActionsSettings.Permissions
 	if !actionsSettingsEnabled(facts) {
+		if !actionsObservedDisabled(facts) {
+			// The settings were never read. Claiming they are safely disabled
+			// would invent an observation.
+			return nil
+		}
 		return successMessage(ruleName, severity, "Repository Actions settings", "pass-disabled", nil)
 	}
 	if permissions == nil || permissions.AllowedActions == nil {
@@ -343,6 +348,11 @@ func allowedActionsSuccessFinding(ruleName, severity string, facts *ScanFacts) *
 
 func defaultWorkflowPermissionsSuccessFinding(ruleName, severity string, facts *ScanFacts) *Finding {
 	if !actionsSettingsEnabled(facts) {
+		if !actionsObservedDisabled(facts) {
+			// The settings were never read. Claiming they are safely disabled
+			// would invent an observation.
+			return nil
+		}
 		return successMessage(ruleName, severity, "Repository Actions settings", "pass-disabled", nil)
 	}
 	perms := facts.ActionsSettings.DefaultWorkflowPermissions
@@ -354,6 +364,11 @@ func defaultWorkflowPermissionsSuccessFinding(ruleName, severity string, facts *
 
 func actionsApprovePRsSuccessFinding(ruleName, severity string, facts *ScanFacts) *Finding {
 	if !actionsSettingsEnabled(facts) {
+		if !actionsObservedDisabled(facts) {
+			// The settings were never read. Claiming they are safely disabled
+			// would invent an observation.
+			return nil
+		}
 		return successMessage(ruleName, severity, "Repository Actions settings", "pass-disabled", nil)
 	}
 	perms := facts.ActionsSettings.DefaultWorkflowPermissions
@@ -365,6 +380,11 @@ func actionsApprovePRsSuccessFinding(ruleName, severity string, facts *ScanFacts
 
 func forkPRApprovalSuccessFinding(ruleName, severity string, facts *ScanFacts) *Finding {
 	if !actionsSettingsEnabled(facts) {
+		if !actionsObservedDisabled(facts) {
+			// The settings were never read. Claiming they are safely disabled
+			// would invent an observation.
+			return nil
+		}
 		return successMessage(ruleName, severity, "Repository Actions settings", "pass-disabled", nil)
 	}
 	policy := facts.ActionsSettings.ForkPRContributorApproval
@@ -524,6 +544,19 @@ func actionsSettingsEnabled(facts *ScanFacts) bool {
 		return false
 	}
 	return permissions.Enabled == nil || *permissions.Enabled
+}
+
+// actionsObservedDisabled reports that GitHub actually told us Actions is
+// switched off for this repository.
+//
+// This is deliberately narrower than !actionsSettingsEnabled(), which is also
+// true when Permissions is nil — that is, when the settings read failed and the
+// scanner knows nothing. Conflating the two let a failed read be reported as
+// the success "GitHub Actions are disabled for this repository", asserting a
+// fact never observed. Absence of evidence is not evidence of absence.
+func actionsObservedDisabled(facts *ScanFacts) bool {
+	permissions := facts.ActionsSettings.Permissions
+	return permissions != nil && permissions.Enabled != nil && !*permissions.Enabled
 }
 
 func evaluateDangerousWorkflowRule(facts *ScanFacts) []Finding {

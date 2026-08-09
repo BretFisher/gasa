@@ -89,7 +89,16 @@ func (c *factCollector) recordSettingsFetchFailure(facts *ActionsSettingsFacts, 
 	case isAccessDenied(resp):
 		setAccessDeniedFinding(facts)
 	default:
-		c.addWarning("actions settings", describeFetchError(err))
+		// Transient failure: unlike the two cases above it produces no access
+		// finding, so without marking every setting undetermined the rules would
+		// fall through to their success helpers. Those read "Actions disabled"
+		// off a nil Permissions pointer and would report that as a pass — a
+		// claim about a setting the scanner never managed to read.
+		cause := describeFetchError(err)
+		c.addWarning("actions settings", cause)
+		for _, setting := range []string{settingAllowedActions, settingWorkflowPermissions, settingForkPRApproval} {
+			facts.markUndetermined(setting, cause)
+		}
 	}
 	if dbg != nil {
 		dbg(repoFull, "actions/permissions fetch error: "+err.Error())

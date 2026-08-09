@@ -322,6 +322,69 @@ func TestEvaluateAllowedActions_AbsentValueReportsUndetermined(t *testing.T) {
 	}
 }
 
+// A transient failure on the top-level settings call produces no access
+// finding, so before this was fixed every settings rule fell through to its
+// success helper and reported "GitHub Actions are disabled for this repository"
+// — a claim about a setting the scanner never read. All four rules must instead
+// report undetermined, and the scan must be marked incomplete.
+func TestCollectActionsSettings_TransientErrorIsNotReportedAsDisabled(t *testing.T) {
+	s, mux := newTestScanner(t, true)
+	mux.HandleFunc("/repos/owner/repo/actions/permissions", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+
+	collector := newTestFactCollector(s)
+	facts := &ScanFacts{ActionsSettings: collector.collectActionsSettingsFacts(context.Background(), "owner", "repo", nil)}
+
+	if len(collector.warnings) == 0 {
+		t.Fatal("a transient settings failure must mark the scan incomplete")
+	}
+
+	for _, tc := range []struct {
+		name string
+		run  func(*ScanFacts) []Finding
+		rule string
+	}{
+		{"allowed-actions", evaluateAllowedActionsPolicyRule, ruleNameAllowedActionsPolicy},
+		{"default-workflow-permissions", evaluateDefaultWorkflowPermissionsRule, ruleNameDefaultWorkflowPermissions},
+		{"actions-can-approve-prs", evaluateActionsCanApprovePRsRule, ruleNameActionsCanApprovePRs},
+		{"fork-pr-approval", evaluateForkPRContributorApprovalRule, ruleNameForkPRContributorApproval},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			findings := tc.run(facts)
+			if len(findings) != 1 || findings[0].Rule != tc.rule {
+				t.Fatalf("findings = %+v, want one undetermined finding for %s", findings, tc.rule)
+			}
+			if findings[0].Success {
+				t.Fatal("an unread setting must never be reported as a success")
+			}
+		})
+	}
+}
+
+// actionsObservedDisabled must separate "GitHub said Actions is off" from "we
+// never managed to ask". Only the first may be reported as a pass.
+func TestActionsObservedDisabled_RequiresAnActualObservation(t *testing.T) {
+	unread := &ScanFacts{}
+	if actionsObservedDisabled(unread) {
+		t.Fatal("a nil Permissions pointer means unread, not disabled")
+	}
+
+	disabled := &ScanFacts{ActionsSettings: ActionsSettingsFacts{
+		Permissions: &github.ActionsPermissionsRepository{Enabled: github.Ptr(false)},
+	}}
+	if !actionsObservedDisabled(disabled) {
+		t.Fatal("enabled:false was observed and must count as disabled")
+	}
+
+	enabled := &ScanFacts{ActionsSettings: ActionsSettingsFacts{
+		Permissions: &github.ActionsPermissionsRepository{Enabled: github.Ptr(true)},
+	}}
+	if actionsObservedDisabled(enabled) {
+		t.Fatal("enabled:true is not disabled")
+	}
+}
+
 // A 404 on the main settings call (GitHub hides repos you can't admin behind a
 // 404, not just 403) must be treated identically to a 403 denial.
 func TestCollectActionsSettings_NotFoundTreatedAsDenial(t *testing.T) {
