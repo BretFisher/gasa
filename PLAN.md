@@ -985,31 +985,31 @@ Correction to R18 as originally written: adding Renovate to `gasa-pass` does **n
 
 #### Accumulated recommendations (action after all 10 rules reviewed)
 
-- **R1 — FIX-CODE, affects rules 1/2/3: unparsable workflow YAML is silently reported as clean.**
-  `WorkflowFact.Valid` is only set when `yaml.Unmarshal` succeeds (`workflow.go:157`). The
-  dangerous-trigger rule `continue`s past invalid files and the parse error surfaces only under
-  `--debug`. A repo whose workflows all fail to parse reports "pull_request_target event is not used"
-  — a clean bill of health for files nobody actually checked. `ScanResult.Incomplete[]` already exists
-  for precisely this situation and is already wired into output; unparsable workflows should be added
-  to it. Practical risk is low because GitHub will not run a workflow it cannot parse either; the real
-  hazard is a divergence between GitHub's parser and `gopkg.in/yaml.v3`, which is an **untested
-  hypothesis** with no evidence behind it yet. Scope confirmed after reviewing rules 1–3: all three
-  share the identical `if !wf.Valid { continue }` guard, so one fix in the collection layer covers
-  every workflow rule
+- ~~**R1**~~ **Done** (PR #38), FIX-CODE, affects rules 1/2/3: unparsable workflow YAML is silently
+  reported as clean. `WorkflowFact.Valid` is only set when `yaml.Unmarshal` succeeds
+  (`workflow.go:157`). The dangerous-trigger rule `continue`s past invalid files and the parse error
+  surfaces only under `--debug`. A repo whose workflows all fail to parse reports "pull_request_target
+  event is not used" — a clean bill of health for files nobody actually checked.
+  `ScanResult.Incomplete[]` already exists for precisely this situation and is already wired into
+  output; unparsable workflows should be added to it. Practical risk is low because GitHub will not
+  run a workflow it cannot parse either; the real hazard is a divergence between GitHub's parser and
+  `gopkg.in/yaml.v3`, which is an **untested hypothesis** with no evidence behind it yet. Scope
+  confirmed after reviewing rules 1–3: all three share the identical `if !wf.Valid { continue }`
+  guard, so one fix in the collection layer covers every workflow rule
 - **R2 — fixture stability, not a rule bug: `daily-repo-status.lock.yml` in `gasa-pass`.** A 101 KB
   machine-generated gh-aw file that upstream tooling rewrites, living in a repo whose entire purpose
   is byte-stability. It will generate recurring `fixtures-verify` drift alarms. Options: leave it and
   let `fixtures-apply` revert the churn (self-healing, some noise), or move the gh-aw workflow out of
   `gasa-pass`. Undecided
-- **R3 — FIX-CODE, rule 2: finding IDs can collide and silently drop a real finding.** The ID is
-  `unpinned-<path>-<sanitized action name>` (`rules.go:541`) and includes neither the ref nor the
-  line. `dedupeFindings` keys purely on ID (`scanner.go:308`), so two unpinned uses of the *same*
-  action in the *same* file collapse into one finding — e.g. `actions/checkout@v4` in one job and
-  `actions/checkout@v3` in another. Proven by code inspection; not yet reproduced at runtime, and
-  `gasa-fail` does not trigger it because its two `actions/checkout` refs live in different files
+- ~~**R3**~~ **Done** (PR #39), FIX-CODE, rule 2: finding IDs can collide and silently drop a real
+  finding. The ID is `unpinned-<path>-<sanitized action name>` (`rules.go:541`) and includes neither
+  the ref nor the line. `dedupeFindings` keys purely on ID (`scanner.go:308`), so two unpinned uses of
+  the *same* action in the *same* file collapse into one finding — e.g. `actions/checkout@v4` in one
+  job and `actions/checkout@v3` in another. Proven by code inspection; not yet reproduced at runtime,
+  and `gasa-fail` does not trigger it because its two `actions/checkout` refs live in different files
   (different paths → different IDs). Fix by including the line number or the ref in the ID. Note this
   changes golden-file entries, so it should land before goldens are generated, not after
-- **R4 — FIX-DOCS, rule 2: the rule doc describes only the regex path.**
+- ~~**R4**~~ **Done** (PR #41), FIX-DOCS, rule 2: the rule doc describes only the regex path.
   `docs/rules/action-version-pinning.md` presents the line regex as *the* mechanism, but that path
   only runs when a workflow fails to parse; the primary path is a structural walk over parsed jobs and
   steps. The doc also says "not a 40-character hex SHA" while `isSHA` accepts 40 or 64 (SHA-256
@@ -1025,14 +1025,14 @@ Correction to R18 as originally written: adding Renovate to `gasa-pass` does **n
   permissions. Option (b) or (c) sits squarely inside the Phase 10 guardrail of "tightly aligned with
   Actions security", and detecting `write-all` is cheap and unambiguous. Undecided — needs a severity
   and false-positive boundary before implementing
-- **R7 — FIX-CODE, low priority, rule 3: a valid-YAML non-workflow file in `.github/workflows` yields
-  a high-severity false positive.** `hasExplicitPermissions` returns false when a file has no
-  `permissions` and zero jobs, so a stray `config.yml` parked in the workflows directory is reported
-  as "No explicit permissions defined" at high severity. The behavior is deliberately asserted today
-  (`none := &WorkflowFile{}` in `workflow_test.go`). GitHub would also reject such a file as an
-  invalid workflow, so flagging it is not wrong — but the message misdiagnoses the problem. Consider a
-  distinct "not a valid workflow" finding instead. Interacts with R1: both concern how the scanner
-  reports files it could not meaningfully evaluate
+- ~~**R7**~~ **Done** (PR #40), FIX-CODE, rule 3: a valid-YAML non-workflow file in
+  `.github/workflows` yields a high-severity false positive. `hasExplicitPermissions` returns false
+  when a file has no `permissions` and zero jobs, so a stray `config.yml` parked in the workflows
+  directory is reported as "No explicit permissions defined" at high severity. The behavior is
+  deliberately asserted today (`none := &WorkflowFile{}` in `workflow_test.go`). GitHub would also
+  reject such a file as an invalid workflow, so flagging it is not wrong — but the message
+  misdiagnoses the problem. Consider a distinct "not a valid workflow" finding instead. Interacts with
+  R1: both concern how the scanner reports files it could not meaningfully evaluate
 - **R8 — moved to Phase 13.** New rule candidate: `sha_pinning_required` is a real repo setting the
   scanner ignores. `GET /repos/{owner}/{repo}/actions/permissions` — the response rule 4 already
   fetches — carries `sha_pinning_required`, GitHub's repo-level enforcement of "require actions to be
@@ -1042,23 +1042,24 @@ Correction to R18 as originally written: adding Renovate to `gasa-pass` does **n
   is already in a response the scanner parses. Strongly aligned with the Phase 10 guardrail. Fixture
   consequence: `gasa-pass` has it `false`, so adopting this rule requires flipping that setting on
   before `gasa-pass` can pass a full sweep
-- **R9 — FIX-CODE, affects all four settings rules (4, 5, 6, 7): a transient settings fetch error is
-  reported as "GitHub Actions are disabled".** When `GET /actions/permissions` fails for a non-auth
-  reason (5xx, timeout), `settings.go` takes the `default:` branch — it records an incomplete-scan
-  warning but leaves `AccessFinding` nil and `facts.Permissions` nil. Every settings rule then finds
-  no findings, and every settings success helper begins with `if !actionsSettingsEnabled(facts)`
-  (`rules.go:328/345/356/367`), which is true when `Permissions` is nil. The result is four success
-  findings asserting "GitHub Actions are disabled for this repository" — a fact the scanner never
-  observed and which may be flatly false. The `Incomplete[]` warning does fire alongside it, so the
-  scan is at least marked partial, but the findings themselves state something untrue. Proven by code
-  inspection, not yet reproduced at runtime. Fix by distinguishing "observed disabled" from "never
-  observed" in the fact model rather than inferring one from a nil pointer
-- **R10 — FIX-CODE, systemic across the settings rules: a missing field makes a rule emit absolutely
-  nothing — and for rules 5 and 6 this is proven, not hypothetical.** Every settings rule pairs an
-  early return on a nil field with a success helper that also returns nil for the same case, so the
-  rule produces neither a finding nor a success. Confirmed instances: rule 4 when `allowed_actions` is
-  absent (`rules.go:603` + `rules.go:331`); rules 5 and 6 when `DefaultWorkflowPermissions` is nil
-  (`rules.go:626`/`rules.go:649` + `rules.go:349`/`rules.go:360`).
+- ~~**R9**~~ **Done** (PR #37), FIX-CODE, affects all four settings rules (4, 5, 6, 7): a transient
+  settings fetch error is reported as "GitHub Actions are disabled". When `GET /actions/permissions`
+  fails for a non-auth reason (5xx, timeout), `settings.go` takes the `default:` branch — it records
+  an incomplete-scan warning but leaves `AccessFinding` nil and `facts.Permissions` nil. Every
+  settings rule then finds no findings, and every settings success helper begins with `if
+  !actionsSettingsEnabled(facts)` (`rules.go:328/345/356/367`), which is true when `Permissions` is
+  nil. The result is four success findings asserting "GitHub Actions are disabled for this repository"
+  — a fact the scanner never observed and which may be flatly false. The `Incomplete[]` warning does
+  fire alongside it, so the scan is at least marked partial, but the findings themselves state
+  something untrue. Proven by code inspection, not yet reproduced at runtime. Fix by distinguishing
+  "observed disabled" from "never observed" in the fact model rather than inferring one from a nil
+  pointer
+- ~~**R10**~~ **Done** (PR #35), FIX-CODE, systemic across the settings rules: a missing field makes a
+  rule emit absolutely nothing — and for rules 5 and 6 this is proven, not hypothetical. Every
+  settings rule pairs an early return on a nil field with a success helper that also returns nil for
+  the same case, so the rule produces neither a finding nor a success. Confirmed instances: rule 4
+  when `allowed_actions` is absent (`rules.go:603` + `rules.go:331`); rules 5 and 6 when
+  `DefaultWorkflowPermissions` is nil (`rules.go:626`/`rules.go:649` + `rules.go:349`/`rules.go:360`).
 
   For rules 5 and 6 the trigger is documented *and* already unit-tested:
   `TestFetchAuthenticatedSettings_DeniedSkipsQuietly` asserts that a **403 on `GET
@@ -1075,7 +1076,7 @@ Correction to R18 as originally written: adding Renovate to `gasa-pass` does **n
   or record an `Incomplete[]` entry, whenever a settings sub-call is refused. For rule 4, the case
   where GitHub omits `allowed_actions` while `enabled: true` remains an **untested hypothesis**
   (likely an org/enterprise policy), not reproducible on these personal repos
-- **R11 — FIX-DOCS, rule 4: the doc contradicts the code on disabled Actions.** `docs/rules/allowed-actions-policy.md` says "if Actions is disabled (`enabled == false`), the rule returns no finding". The code returns a success finding (`pass-disabled`, "GitHub Actions are disabled for this repository")
+- ~~**R11**~~ **Done** (PR #41), FIX-DOCS, rule 4: the doc contradicted the code on disabled Actions. `docs/rules/allowed-actions-policy.md` says "if Actions is disabled (`enabled == false`), the rule returns no finding". The code returns a success finding (`pass-disabled`, "GitHub Actions are disabled for this repository")
 - ~~**R12 — FIX-FIXTURE, rule 5: flip `gasa-fail` to `default_workflow_permissions: write`.**~~ **Done
   2026-08-09** (applied manually in the GitHub UI, verified by `gh api`). Rule 5 now fails on
   `gasa-fail`. The paired hygiene item still stands: make the fixture workflow `run:` steps inert
@@ -1128,13 +1129,14 @@ Correction to R18 as originally written: adding Renovate to `gasa-pass` does **n
   transitive preset resolution, since that config must resolve to "pinning enabled". The earlier
   concern that this costs the all-nine-paths-404 fixture was wrong — `gasa-fail` stays Dependabot-only
   and continues to exercise that path
-- **R20 — FIX-CODE, confirmed false positive, highest-value finding of this audit: rule 10 does not
-  resolve Renovate preset inheritance.** `renovatePinningConfigured` (`updates.go:490`) matches only
-  the literal strings `helpers:pinGitHubActionDigests` and `helpers:pinGitHubActionDigestsToSemver` in
-  `extends`. It does not expand presets transitively. Verified against Renovate's own documentation:
-  **`config:best-practices` extends `helpers:pinGitHubActionDigests`**, alongside
-  `config:recommended`, `docker:pinDigests`, `:configMigration`, `:pinDevDependencies`,
-  `abandonments:recommended`, `security:minimumReleaseAgeNpm`, and `:maintainLockFilesWeekly`.
+- ~~**R20**~~ **Done** (PR #34), FIX-CODE, confirmed false positive, highest-value finding of this
+  audit: rule 10 does not resolve Renovate preset inheritance. `renovatePinningConfigured`
+  (`updates.go:490`) matches only the literal strings `helpers:pinGitHubActionDigests` and
+  `helpers:pinGitHubActionDigestsToSemver` in `extends`. It does not expand presets transitively.
+  Verified against Renovate's own documentation: **`config:best-practices` extends
+  `helpers:pinGitHubActionDigests`**, alongside `config:recommended`, `docker:pinDigests`,
+  `:configMigration`, `:pinDevDependencies`, `abandonments:recommended`,
+  `security:minimumReleaseAgeNpm`, and `:maintainLockFilesWeekly`.
 
   So a repository using `{"extends": ["config:best-practices"]}` — Renovate's own recommended starting
   configuration and one of the most common real-world configs — **is genuinely pinning GitHub Action
@@ -1160,10 +1162,10 @@ Correction to R18 as originally written: adding Renovate to `gasa-pass` does **n
   is a genuine not-pinning config. It also carries no `minimumReleaseAge`, so it fails rule 9 at the
   same time — exactly the pairing `gasa-fail-private` exists to provide
 
-- **R22 — RULE CHANGE, approved: extend rule 10 (`update-tool-actions-pinning`) to recognise
-  Dependabot.** Today the rule is Renovate-only and stays silent for Dependabot-only repos. The intent
-  of the check is narrower than its current implementation suggests: *if either updater is configured
-  for `github-actions`, will it keep SHA pins current?* That is a different question from
+- ~~**R22**~~ **Done** (PR #34), RULE CHANGE: extend rule 10 (`update-tool-actions-pinning`) to
+  recognise Dependabot. Today the rule is Renovate-only and stays silent for Dependabot-only repos.
+  The intent of the check is narrower than its current implementation suggests: *if either updater is
+  configured for `github-actions`, will it keep SHA pins current?* That is a different question from
   `update-tool-configuration`, which only asks whether an updater covers actions at all and does not
   care about pinning.
 
@@ -1196,12 +1198,12 @@ Correction to R18 as originally written: adding Renovate to `gasa-pass` does **n
     Renovate provides coverage. This also exercises the both-tools-present path, which no other fixture
     does
 
-- **R19 — FIX-CODE: a rule that emits nothing still logs `rule:pass`.** With `--debug`, rule 9 on
-  `gasa-fail` prints `rule:pass updates/update-tool-actions-cooldown (no findings)` while emitting
-  neither a finding nor a success record. An operator reading debug output concludes the rule
-  evaluated and passed; the report shows the rule never happened. Whatever fix lands for R10's
-  silent-emission problem should also make the debug line distinguish "passed and said so" from
-  "produced nothing"
+- ~~**R19**~~ **Done** (PR #35), FIX-CODE: a rule that emitted nothing still logged `rule:pass`. With
+  `--debug`, rule 9 on `gasa-fail` prints `rule:pass updates/update-tool-actions-cooldown (no
+  findings)` while emitting neither a finding nor a success record. An operator reading debug output
+  concludes the rule evaluated and passed; the report shows the rule never happened. Whatever fix
+  lands for R10's silent-emission problem should also make the debug line distinguish "passed and said
+  so" from "produced nothing"
 - **R17 — efficiency, rule 8 and batch mode: nine 404 probes per scan just to look for Renovate.** A
   full scan of `gasa-pass` issues 19 GitHub API calls, and **9 of them** are contents requests for
   Renovate config paths that do not exist (`renovate.json`, `renovate.json5`,
@@ -1232,11 +1234,12 @@ Correction to R18 as originally written: adding Renovate to `gasa-pass` does **n
   `dependabot.yml` declares a `docker` ecosystem with no Dockerfile in the repo. Decide whether
   fixture repos should have Dependabot updates suppressed (`open-pull-requests-limit: 0`) or left to
   churn with `fixtures-apply` reverting
-- **R5 — FIX-DOCS, sweep across all 10 rule pages: the "Check ID" table row appears stale.** Rule
-  pages advertise values like `action_pinning` and `pull_request_target`, but no emitted finding uses
-  those strings — real IDs are of the form `unpinned-<path>-<action>` and `dangerous-trigger-<path>`.
-  Either correct the row to the real ID pattern or drop it. Confirm against the remaining rule pages
-  before deciding, since the fix should be uniform
+- ~~**R5**~~ **Done** (PR #41), FIX-DOCS: the "Check ID" table row was stale on seven pages; replaced
+  with rule name and aliases. Rule pages advertise values like `action_pinning` and
+  `pull_request_target`, but no emitted finding uses those strings — real IDs are of the form
+  `unpinned-<path>-<action>` and `dangerous-trigger-<path>`. Either correct the row to the real ID
+  pattern or drop it. Confirm against the remaining rule pages before deciding, since the fix should
+  be uniform
 
 ### Audit outcome and action order
 
@@ -1263,7 +1266,21 @@ findings or `Incomplete[]` entries that do not exist today. Generating goldens f
 current behavior in as expected and force a full regeneration. Freeze the code, then the fixtures,
 then generate goldens.
 
-**Phase A — code correctness.** These affect anyone running the tool today, independent of the e2e work.
+**Phase A — code correctness. Complete, in stack #36 (PRs #34–#41), awaiting review and merge.** These affect anyone running the tool today, independent of the e2e work. Phase B landed with them as PR #41.
+
+The stack merges bottom-up in this order:
+
+| PR | Branch | Fixes |
+|---|---|---|
+| #34 | `fix/renovate-preset-and-dependabot-pinning` | R20, R22 |
+| #35 | `fix/settings-undetermined-checks` | R10, R19 |
+| #37 | `fix/settings-transient-error-not-disabled` | R9 |
+| #38 | `fix/unparsable-workflows-incomplete` | R1 |
+| #39 | `fix/action-pinning-finding-id-collision` | R3 |
+| #40 | `fix/non-workflow-file-message` | R7 |
+| #41 | `docs/rule-page-corrections` | R4, R5, R11 |
+
+Phase C cannot begin until this stack is merged: PRs #34 and #39 change rule outcomes and finding IDs, and #35, #37, #38, and #40 add findings and incomplete entries that do not exist today. Generating goldens before they land would bake current behavior in as expected.
 
 1. **R20 + R22 together** — transitive Renovate preset resolution, and the rule 10 extension that depends on it. Highest user impact; R22 cannot be correct without R20
 2. **R10 + R19** — settings rules emitting nothing when a field is absent or a sub-call is refused, and the `rule:pass` debug line that misreports it. Security-critical: a refused sub-call silently removes a high and a medium rule from the scan
@@ -1289,10 +1306,18 @@ then generate goldens.
 
 ### Open decisions
 
-- R22's sub-decision: should a Dependabot `github-actions` entry pass rule 10 unconditionally (Option A) or only when rule 2 finds no unpinned actions (Option B)? Recommendation: Option A with explicit wording
-- should the e2e job also assert exit codes and human table output, or only the scanner API? Recommendation: scanner API for the matrix, one thin CLI smoke test for auth and config wiring
-- R6, R8, R16: which of the three new-rule candidates, if any, to build
-- whether to suppress Dependabot on the fixture repos or let `fixtures-apply` revert its churn
+- should the e2e job also assert exit codes and human table output, or only the scanner API? In other
+  words: call the scanner's Go API directly and check the findings it returns, or run the real `gasa`
+  binary and check what a user sees. API-only gives clearer failures; running the binary also covers
+  CLI wiring (flag parsing, token resolution) that the API path skips. Recommendation: both, weighted
+  — the API for the 10-rule matrix, plus one small test that runs the binary end to end
+- whether to suppress Dependabot on the fixture repos or let `fixtures-apply` revert its churn.
+  `gasa-pass` currently has five open Dependabot PRs proposing action bumps; if one merges, the repo
+  no longer matches the checked-in fixture and the drift check fires. Either set
+  `open-pull-requests-limit: 0` there to freeze it, or leave it and let `fixtures-apply` push the
+  intended state back. The second needs no setup and self-heals; the first means fewer surprise
+  failures
+- R6, R8, R16 have moved to Phase 13 and are decided there, not here
 
 Result needed:
 
