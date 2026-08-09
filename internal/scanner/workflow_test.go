@@ -258,6 +258,54 @@ func TestEvaluateActionVersionPinningRule_SameActionTwoRefsBothReported(t *testi
 	}
 }
 
+// A file that parses as YAML but defines no jobs is not a runnable workflow —
+// typically a stray config file in .github/workflows. It used to draw a
+// high-severity "No explicit permissions defined", which misdiagnoses the
+// problem: the file is the problem, not its permissions block. It is now
+// reported as an incomplete-scan warning instead, so it is neither misreported
+// nor silently dropped.
+func TestWorkflowWithNoJobs_WarnsInsteadOfClaimingMissingPermissions(t *testing.T) {
+	s, mux := newTestScanner(t, false)
+	handleJSON(mux, "/repos/owner/repo/contents/.github/workflows", []*github.RepositoryContent{{
+		Path: github.Ptr(".github/workflows/config.yml"),
+		Name: github.Ptr("config.yml"),
+	}})
+	handleJSON(mux, "/repos/owner/repo/contents/.github/workflows/config.yml",
+		encodedContent(".github/workflows/config.yml", "some_setting: true\nanother: value\n"))
+
+	collector := newTestFactCollector(s)
+	workflows := collector.collectWorkflowFacts(context.Background(), "owner", "repo", nil)
+
+	if len(collector.warnings) != 1 || !strings.Contains(collector.warnings[0].Detail, "no jobs") {
+		t.Fatalf("warnings = %+v, want one 'no jobs' warning", collector.warnings)
+	}
+
+	findings := evaluateWorkflowPermissionsRule(&ScanFacts{Workflows: workflows})
+	if len(findings) != 0 {
+		t.Fatalf("findings = %+v, want none — a jobless file has no permissions to declare", findings)
+	}
+}
+
+// A real workflow that happens to declare no permissions must still be flagged;
+// the jobless skip above must not swallow the genuine case.
+func TestEvaluateWorkflowPermissionsRule_RealWorkflowStillFlagged(t *testing.T) {
+	content := "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n"
+	workflow := &WorkflowFile{}
+	if err := yaml.Unmarshal([]byte(content), workflow); err != nil {
+		t.Fatalf("yaml.Unmarshal() error: %v", err)
+	}
+
+	findings := evaluateWorkflowPermissionsRule(&ScanFacts{Workflows: []WorkflowFact{{
+		Path:     ".github/workflows/ci.yml",
+		Content:  content,
+		Workflow: workflow,
+		Valid:    true,
+	}}})
+	if len(findings) != 1 {
+		t.Fatalf("findings = %+v, want one no-permissions finding", findings)
+	}
+}
+
 func TestEvaluateWorkflowRules_Integration(t *testing.T) {
 	content := "on: pull_request_target\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n"
 	workflow := &WorkflowFile{}
