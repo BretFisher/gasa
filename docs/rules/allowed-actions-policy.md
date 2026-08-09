@@ -63,6 +63,10 @@ Behavior:
 - if `allowed_actions == all`, it creates a medium finding
 - if `allowed_actions == local_only`, it creates an informational "good" finding
 - if `allowed_actions == selected`, it treats that as the desired setting
+- if Actions is enabled but GitHub reports no `allowed_actions` value at all (observed when
+  an org or enterprise policy governs the repository), the rule reports an informational
+  `undetermined-*` finding rather than staying silent — an unreadable setting is unknown,
+  not clean
 - if the repository settings endpoint is unavailable without auth, the CLI can return an informational `settings-check-unavailable` finding for this rule
 - if the CLI is authenticated but still cannot read the setting, it can return an informational `settings-check-failed` finding for this rule
 

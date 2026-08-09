@@ -37,24 +37,7 @@ func (c *factCollector) collectActionsSettingsFacts(ctx context.Context, owner, 
 	}
 	permissions, resp, err := c.client.Repositories.GetActionsPermissions(ctx, owner, repo)
 	if err != nil {
-		// Three distinct causes, three distinct messages:
-		//   - unauthenticated      → tell them to supply a token
-		//   - authenticated denial → tell them exactly which permission to add
-		//   - transient (5xx, …)   → an incomplete-scan warning with the real cause
-		// A denial is determinate and fully explained by its finding, so it is
-		// NOT also counted as incomplete (that would double-report and erode
-		// trust in the incomplete warning).
-		switch {
-		case !c.authenticated:
-			setUnauthenticatedAccessFinding(&facts)
-		case isAccessDenied(resp):
-			setAccessDeniedFinding(&facts)
-		default:
-			c.addWarning("actions settings", describeFetchError(err))
-		}
-		if dbg != nil {
-			dbg(repoFull, "actions/permissions fetch error: "+err.Error())
-		}
+		c.recordSettingsFetchFailure(&facts, resp, err, repoFull, dbg)
 		return facts
 	}
 	if dbg != nil {
@@ -64,6 +47,15 @@ func (c *factCollector) collectActionsSettingsFacts(ctx context.Context, owner, 
 	}
 
 	facts.Permissions = permissions
+	// Actions is enabled but GitHub did not report a policy value. Observed when
+	// an org or enterprise policy governs the repository. Without this the rule
+	// would emit neither a finding nor a success and vanish from the report.
+	if permissions.AllowedActions == nil && (permissions.Enabled == nil || *permissions.Enabled) {
+		facts.markUndetermined(settingAllowedActions, "GitHub did not report an allowed-actions value for this repository")
+		if dbg != nil {
+			dbg(repoFull, "actions/permissions: allowed_actions absent — undetermined")
+		}
+	}
 	if permissions.Enabled != nil && !*permissions.Enabled {
 		if dbg != nil {
 			dbg(repoFull, "actions disabled for this repo — skipping workflow/fork-pr settings")
@@ -78,6 +70,30 @@ func (c *factCollector) collectActionsSettingsFacts(ctx context.Context, owner, 
 	}
 
 	return facts
+}
+
+// recordSettingsFetchFailure classifies a failed top-level Actions settings
+// read. Three distinct causes get three distinct messages:
+//
+//   - unauthenticated      → tell them to supply a token
+//   - authenticated denial → tell them exactly which permission to add
+//   - transient (5xx, …)   → an incomplete-scan warning with the real cause
+//
+// A denial is determinate and fully explained by its finding, so it is NOT also
+// counted as incomplete — that would double-report and erode trust in the
+// incomplete warning.
+func (c *factCollector) recordSettingsFetchFailure(facts *ActionsSettingsFacts, resp *github.Response, err error, repoFull string, dbg DebugLogger) {
+	switch {
+	case !c.authenticated:
+		setUnauthenticatedAccessFinding(facts)
+	case isAccessDenied(resp):
+		setAccessDeniedFinding(facts)
+	default:
+		c.addWarning("actions settings", describeFetchError(err))
+	}
+	if dbg != nil {
+		dbg(repoFull, "actions/permissions fetch error: "+err.Error())
+	}
 }
 
 // setAccessDeniedFinding records that an authenticated token was accepted but
@@ -130,11 +146,16 @@ func fetchAuthenticatedActionsSettings(ctx context.Context, c *factCollector, ow
 				perms.GetDefaultWorkflowPermissions(), perms.GetCanApprovePullRequestReviews()))
 		}
 	case isAccessDenied(resp):
-		// Determinate "not accessible / not available" — nothing to flag.
+		// Determinate as an HTTP outcome, but NOT determinate as a security
+		// answer: the settings are whatever they are, we simply could not read
+		// them. Recording it lets the rules report "could not determine" rather
+		// than disappearing from the report entirely.
+		facts.markUndetermined(settingWorkflowPermissions, fmt.Sprintf("GitHub returned %d — the token cannot read this setting", resp.StatusCode))
 		if dbg != nil {
-			dbg(repoFull, fmt.Sprintf("workflow permissions fetch: status %d — skipped", resp.StatusCode))
+			dbg(repoFull, fmt.Sprintf("workflow permissions fetch: status %d — undetermined", resp.StatusCode))
 		}
 	default:
+		facts.markUndetermined(settingWorkflowPermissions, describeFetchError(err))
 		c.addWarning("workflow default permissions", describeFetchError(err))
 		if dbg != nil {
 			dbg(repoFull, "workflow permissions fetch could not be determined: "+describeFetchError(err))
@@ -152,10 +173,12 @@ func fetchAuthenticatedActionsSettings(ctx context.Context, c *factCollector, ow
 			dbg(repoFull, "fork-pr-approval: policy="+policy.ApprovalPolicy)
 		}
 	case isAccessDenied(resp):
+		facts.markUndetermined(settingForkPRApproval, fmt.Sprintf("GitHub returned %d — the token cannot read this setting", resp.StatusCode))
 		if dbg != nil {
-			dbg(repoFull, fmt.Sprintf("fork-pr-approval fetch: status %d — skipped", resp.StatusCode))
+			dbg(repoFull, fmt.Sprintf("fork-pr-approval fetch: status %d — undetermined", resp.StatusCode))
 		}
 	default:
+		facts.markUndetermined(settingForkPRApproval, describeFetchError(err))
 		c.addWarning("fork-PR contributor approval", describeFetchError(err))
 		if dbg != nil {
 			dbg(repoFull, "fork-pr-approval fetch could not be determined: "+describeFetchError(err))

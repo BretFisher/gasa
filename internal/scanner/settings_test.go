@@ -248,7 +248,11 @@ func TestEvaluateForkPRApprovalPolicy_AllExternal(t *testing.T) {
 	}
 }
 
-func TestEvaluateForkPRApprovalPolicy_ForbiddenSkips(t *testing.T) {
+// A refused fork-PR sub-call must be reported as undetermined, not skipped. The
+// top-level settings call succeeded, so no access finding is recorded, and the
+// rule used to emit nothing at all — leaving a high-severity check silently
+// absent from a report that still looked clean.
+func TestEvaluateForkPRApprovalPolicy_ForbiddenReportsUndetermined(t *testing.T) {
 	s, mux := newTestScanner(t, true)
 	handleJSON(mux, "/repos/owner/repo/actions/permissions", map[string]any{"enabled": true, "allowed_actions": "selected"})
 	handleJSON(mux, "/repos/owner/repo/actions/permissions/workflow", map[string]any{"default_workflow_permissions": "read", "can_approve_pull_request_reviews": false})
@@ -258,9 +262,63 @@ func TestEvaluateForkPRApprovalPolicy_ForbiddenSkips(t *testing.T) {
 			t.Errorf("failed to write response: %v", err)
 		}
 	})
+
 	findings := collectAndEvaluateActionsSettings(t, s)
-	if len(findings) != 0 {
-		t.Fatalf("findings = %+v", findings)
+	if len(findings) != 1 {
+		t.Fatalf("findings = %+v, want exactly one undetermined finding", findings)
+	}
+	f := findings[0]
+	if f.Rule != ruleNameForkPRContributorApproval {
+		t.Fatalf("rule = %q, want %q", f.Rule, ruleNameForkPRContributorApproval)
+	}
+	if f.Severity != SeverityInfo {
+		t.Fatalf("severity = %q, want info — a coverage hole is not a vulnerability", f.Severity)
+	}
+	if f.Success {
+		t.Fatal("an undetermined check must never be recorded as a success")
+	}
+	if !strings.Contains(f.Description, "403") {
+		t.Fatalf("description should name the cause, got %q", f.Description)
+	}
+}
+
+// Both rules that read /actions/permissions/workflow must report undetermined
+// when it is refused, and their findings must not collide under dedupe.
+func TestEvaluateWorkflowSettings_ForbiddenReportsUndeterminedForBothRules(t *testing.T) {
+	s, mux := newTestScanner(t, true)
+	handleJSON(mux, "/repos/owner/repo/actions/permissions", map[string]any{"enabled": true, "allowed_actions": "selected"})
+	mux.HandleFunc("/repos/owner/repo/actions/permissions/workflow", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	})
+	handleJSON(mux, "/repos/owner/repo/actions/permissions/fork-pr-contributor-approval", map[string]any{"approval_policy": "all_external_contributors"})
+
+	findings := collectAndEvaluateActionsSettings(t, s)
+	got := make(map[string]bool)
+	for _, f := range findings {
+		got[f.Rule] = true
+	}
+	for _, want := range []string{ruleNameDefaultWorkflowPermissions, ruleNameActionsCanApprovePRs} {
+		if !got[want] {
+			t.Fatalf("rule %q did not report undetermined; findings = %+v", want, findings)
+		}
+	}
+}
+
+// An absent allowed_actions value on an enabled repository is undetermined, not
+// clean. GitHub omits it when an org or enterprise policy governs the repo.
+func TestEvaluateAllowedActions_AbsentValueReportsUndetermined(t *testing.T) {
+	s, mux := newTestScanner(t, true)
+	handleJSON(mux, "/repos/owner/repo/actions/permissions", map[string]any{"enabled": true})
+	handleJSON(mux, "/repos/owner/repo/actions/permissions/workflow", map[string]any{"default_workflow_permissions": "read", "can_approve_pull_request_reviews": false})
+	handleJSON(mux, "/repos/owner/repo/actions/permissions/fork-pr-contributor-approval", map[string]any{"approval_policy": "all_external_contributors"})
+
+	facts := &ScanFacts{ActionsSettings: newTestFactCollector(s).collectActionsSettingsFacts(context.Background(), "owner", "repo", nil)}
+	findings := evaluateAllowedActionsPolicyRule(facts)
+	if len(findings) != 1 || findings[0].Rule != ruleNameAllowedActionsPolicy {
+		t.Fatalf("findings = %+v, want one undetermined allowed-actions finding", findings)
+	}
+	if findings[0].Severity != SeverityInfo || findings[0].Success {
+		t.Fatalf("undetermined finding = %+v, want info severity and not a success", findings[0])
 	}
 }
 
@@ -329,11 +387,12 @@ func TestFetchAuthenticatedSettings_TransientErrorsWarn(t *testing.T) {
 	}
 }
 
-// A 403/404 on the sub-calls is a determinate denial: skipped, with neither a
-// finding nor an incomplete warning (the main settings finding already explains
-// the missing permission). This covers the default-workflow-permissions skip
-// branch that the fork-PR test does not.
-func TestFetchAuthenticatedSettings_DeniedSkipsQuietly(t *testing.T) {
+// A 403/404 on the sub-calls leaves the values unset and raises no incomplete
+// warning — the denial is determinate as an HTTP outcome, so it is not a
+// transient failure. The rules still surface it as an undetermined finding
+// (see the ForbiddenReportsUndetermined tests); this test covers only the
+// collection side.
+func TestFetchAuthenticatedSettings_DeniedLeavesValuesUnset(t *testing.T) {
 	s, mux := newTestScanner(t, true)
 	handleJSON(mux, "/repos/owner/repo/actions/permissions", map[string]any{"enabled": true, "allowed_actions": "selected"})
 	mux.HandleFunc("/repos/owner/repo/actions/permissions/workflow", func(w http.ResponseWriter, _ *http.Request) {

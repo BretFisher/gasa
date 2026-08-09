@@ -164,30 +164,7 @@ func (s *Scanner) ScanRepoWithOptions(ctx context.Context, owner, repo string, o
 	}
 
 	for _, r := range rules {
-		if dbg != nil {
-			dbg(repoFull, "rule:start "+r.Name)
-		}
-		findings := r.run(facts)
-		findings = applyRuleConfig(findings, r, opts.Config)
-		if len(findings) == 0 && opts.IncludeSuccess {
-			if success := buildRuleSuccessFinding(r, facts, opts.Config); success != nil {
-				if dbg != nil {
-					dbg(repoFull, "rule:pass "+r.Name)
-				}
-				result.Findings = append(result.Findings, *success)
-				continue
-			}
-		}
-		if dbg != nil {
-			if len(findings) == 0 {
-				dbg(repoFull, "rule:pass "+r.Name+" (no findings)")
-			} else {
-				for _, f := range findings {
-					dbg(repoFull, "rule:finding "+r.Name+" id="+f.ID+" severity="+f.Severity)
-				}
-			}
-		}
-		result.Findings = append(result.Findings, findings...)
+		result.Findings = append(result.Findings, evaluateRule(r, facts, opts, repoFull, dbg)...)
 	}
 	result.Findings = applySuppressions(result.Findings, opts.Config)
 	result.Findings = addFixURLs(result.Findings, owner, repo, facts.DefaultBranch)
@@ -196,6 +173,46 @@ func (s *Scanner) ScanRepoWithOptions(ctx context.Context, owner, repo string, o
 	sortFindings(result.Findings)
 
 	return result, nil
+}
+
+// evaluateRule runs one rule and returns what it contributes to the report:
+// its findings, or a success finding when it produced none and successes were
+// requested.
+func evaluateRule(r rule, facts *ScanFacts, opts ScanOptions, repoFull string, dbg DebugLogger) []Finding {
+	if dbg != nil {
+		dbg(repoFull, "rule:start "+r.Name)
+	}
+
+	findings := applyRuleConfig(r.run(facts), r, opts.Config)
+	if len(findings) > 0 {
+		if dbg != nil {
+			for _, f := range findings {
+				dbg(repoFull, "rule:finding "+r.Name+" id="+f.ID+" severity="+f.Severity)
+			}
+		}
+		return findings
+	}
+
+	if opts.IncludeSuccess {
+		if success := buildRuleSuccessFinding(r, facts, opts.Config); success != nil {
+			if dbg != nil {
+				dbg(repoFull, "rule:pass "+r.Name)
+			}
+			return []Finding{*success}
+		}
+		// Neither a finding nor a success: the rule contributed nothing to the
+		// report at all. This used to log rule:pass, which read as "evaluated
+		// and clean" while the rule was in fact absent from the output.
+		if dbg != nil {
+			dbg(repoFull, "rule:silent "+r.Name+" (no finding and no success — rule did not report)")
+		}
+		return nil
+	}
+
+	if dbg != nil {
+		dbg(repoFull, "rule:pass "+r.Name+" (no findings)")
+	}
+	return nil
 }
 
 func classifyGitHubRepoAccessError(err error) string {

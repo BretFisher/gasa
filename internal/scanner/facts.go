@@ -45,6 +45,41 @@ type ActionsSettingsFacts struct {
 	AccessFinding              *Finding
 	DefaultWorkflowPermissions *github.DefaultWorkflowPermissionRepository
 	ForkPRContributorApproval  *github.ContributorApprovalPermissions
+
+	// Undetermined records settings the scanner tried to read but could not,
+	// keyed by the constants below and holding a human-readable cause.
+	//
+	// A nil settings pointer is ambiguous on its own: it means either "GitHub
+	// told us nothing because the sub-call was refused" or "the field was
+	// genuinely absent". Rules previously could not tell those apart from
+	// "everything is fine", so a refused sub-call made a rule emit no finding,
+	// no success, and no warning — the check silently vanished from the report
+	// while the scan still looked clean. This map is what lets a rule say "could
+	// not determine" out loud instead.
+	Undetermined map[string]string
+}
+
+// Keys for ActionsSettingsFacts.Undetermined. One key per API sub-call, since
+// that is the granularity at which a read succeeds or fails.
+const (
+	settingAllowedActions      = "allowed-actions policy"
+	settingWorkflowPermissions = "workflow permissions"
+	settingForkPRApproval      = "fork-PR contributor approval"
+)
+
+// markUndetermined records that a setting could not be read, and why.
+func (f *ActionsSettingsFacts) markUndetermined(setting, cause string) {
+	if f.Undetermined == nil {
+		f.Undetermined = make(map[string]string)
+	}
+	f.Undetermined[setting] = cause
+}
+
+// undeterminedCause returns the recorded cause and whether the setting was
+// marked undetermined.
+func (f *ActionsSettingsFacts) undeterminedCause(setting string) (string, bool) {
+	cause, ok := f.Undetermined[setting]
+	return cause, ok
 }
 
 type DependabotFacts struct {
