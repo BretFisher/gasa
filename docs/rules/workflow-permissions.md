@@ -29,7 +29,8 @@ messages:
 | | |
 |---|---|
 | **Severity** | High |
-| **Check ID** | `workflow_permissions` |
+| **Rule name** | `workflows/workflow-permissions` |
+| **Aliases** | `workflow-permissions`, `permissions` |
 
 ## What it checks
 

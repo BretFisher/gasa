@@ -35,7 +35,8 @@ messages:
 | | |
 |---|---|
 | **Severity** | High |
-| **Check ID** | `actions_settings` |
+| **Rule name** | `actions/permissions/fork-pr-contributor-approval` |
+| **Aliases** | `fork-pr-contributor-approval`, `fork-pr-approval` |
 | **Auth required** | Yes |
 | **Minimum fine-grained permission** | `Administration: Read` |
 | **Classic PAT** | `repo` |

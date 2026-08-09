@@ -37,7 +37,8 @@ messages:
 | | |
 |---|---|
 | **Severity** | High |
-| **Check ID** | `actions_settings` |
+| **Rule name** | `actions/permissions/workflow/default-workflow-permissions` |
+| **Aliases** | `default-workflow-permissions`, `default-permissions` |
 | **Auth required** | Yes |
 | **Minimum fine-grained permission** | `Administration: Read` |
 | **Classic PAT** | `repo` |

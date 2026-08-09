@@ -33,7 +33,8 @@ messages:
 | | |
 |---|---|
 | **Severity** | Medium |
-| **Check ID** | `actions_settings` |
+| **Rule name** | `actions/permissions/workflow/actions-can-approve-prs` |
+| **Aliases** | `actions-can-approve-prs`, `approve-prs` |
 | **Auth required** | Yes |
 | **Minimum fine-grained permission** | `Administration: Read` |
 | **Classic PAT** | `repo` |

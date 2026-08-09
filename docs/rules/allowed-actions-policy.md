@@ -37,7 +37,8 @@ messages:
 | | |
 |---|---|
 | **Severity** | Medium |
-| **Check ID** | `actions_settings` |
+| **Rule name** | `actions/permissions/allowed-actions-policy` |
+| **Aliases** | `allowed-actions-policy`, `allowed-actions` |
 | **Auth required** | Yes |
 | **Minimum fine-grained permission** | `Administration: Read` |
 | **Classic PAT** | `repo` |
@@ -59,9 +60,13 @@ It reads:
 
 Behavior:
 
-- if Actions is disabled (`enabled == false`), the rule returns no finding
+- if Actions is disabled (`enabled == false`), the rule passes — unrestricted third-party
+  actions cannot run in a repository where Actions cannot run at all. This requires GitHub
+  to have actually reported `enabled: false`; a settings read that failed is undetermined,
+  not disabled
 - if `allowed_actions == all`, it creates a medium finding
-- if `allowed_actions == local_only`, it creates an informational "good" finding
+- if `allowed_actions == local_only`, the rule passes — only actions defined inside the
+  repository can run, which blocks third-party public actions entirely
 - if `allowed_actions == selected`, it treats that as the desired setting
 - if Actions is enabled but GitHub reports no `allowed_actions` value at all (observed when
   an org or enterprise policy governs the repository), the rule reports an informational

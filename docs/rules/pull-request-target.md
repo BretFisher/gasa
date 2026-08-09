@@ -31,7 +31,8 @@ messages:
 | | |
 |---|---|
 | **Severity** | Critical |
-| **Check ID** | `pull_request_target` |
+| **Rule name** | `workflows/pull-request-target` |
+| **Aliases** | `pull-request-target` |
 
 ## What it checks
 
