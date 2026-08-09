@@ -172,7 +172,7 @@ updates:
       interval: "weekly"
 ```
 
-**Renovate — packageRule scoped to github-actions:**
+**Renovate — packageRule scoped to `github-actions`:**
 
 ```json
 {
