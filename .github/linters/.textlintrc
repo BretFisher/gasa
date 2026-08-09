@@ -1,0 +1,19 @@
+{
+  "filters": {
+    "comments": true
+  },
+  "rules": {
+    "terminology": {
+      "defaultTerms": true,
+      "exclude": [
+        "repo\\b",
+        "readme(s)?",
+        "ID",
+        "e2e",
+        "end ?to ?end",
+        "end[- ]?2[- ]?end",
+        "regexp?(s)?"
+      ]
+    }
+  }
+}

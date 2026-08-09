@@ -1,0 +1,47 @@
+---
+###########################
+## Markdown Linter rules ##
+###########################
+#
+# Based on super-linter's default template, with two repository-specific
+# additions documented below.
+# Rules doc: https://github.com/DavidAnson/markdownlint
+#
+# To silence a single violation inline:
+#   <!-- markdownlint-disable -->
+#   any violations you want
+#   <!-- markdownlint-restore -->
+
+###############
+# Rules by id #
+###############
+MD004: false # Unordered list style
+MD007:
+  indent: 2 # Unordered list indentation
+MD013:
+  line_length: 400 # Line length 80 is far too short
+MD026:
+  punctuation: ".,;:!。，；:" # List of not allowed
+
+# Every page under docs/rules/ carries YAML front matter with a `title:` field,
+# which is the rule registry's source of truth and is parsed by the scanner.
+# markdownlint treats that field as the document's H1 by default, so the page's
+# own `# Heading` reads as a second top-level heading. Clearing the pattern stops
+# front matter from being counted as a heading; the docs themselves are correct.
+MD025:
+  front_matter_title: ""
+
+MD029: false # Ordered list item prefix
+MD033: false # Allow inline HTML
+MD036: false # Emphasis used instead of a heading
+
+# Table column style, added in markdownlint 0.48.0. The rule docs open with a
+# borderless metadata table (`| | |`) used consistently across all ten pages,
+# which the rule reads as inconsistent cell padding. This is presentation-only
+# with no correctness value, and the existing style is deliberate and uniform.
+MD060: false
+
+#################
+# Rules by tags #
+#################
+blank_lines: false # Error on blank lines
