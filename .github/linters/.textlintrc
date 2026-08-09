@@ -1,0 +1,21 @@
+{
+  "filters": {
+    "comments": true
+  },
+  "rules": {
+    "terminology": {
+      "defaultTerms": true,
+      "exclude": [
+        "[Rr]epo\\b",
+        "[Rr]epos\\b",
+        "e2e",
+        "E2E",
+        "README",
+        "[Rr]egex",
+        "id",
+        "end to end",
+        "github-actions"
+      ]
+    }
+  }
+}
