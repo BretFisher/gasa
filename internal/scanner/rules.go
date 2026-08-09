@@ -480,6 +480,44 @@ func appendSettingsAccessFinding(findings []Finding, facts *ScanFacts) []Finding
 	return append(findings, *facts.ActionsSettings.AccessFinding)
 }
 
+// undeterminedSettingFinding reports that a rule could not be evaluated because
+// its input could not be read.
+//
+// This exists so a rule never silently produces nothing. "No finding" is
+// indistinguishable from "clean" in every report format, so a check that
+// quietly disappears reads as a pass — the most dangerous possible failure for a
+// security scanner. Severity is info: it is not a vulnerability, it is a hole in
+// the scan's coverage, and it should not inflate the finding counts operators
+// triage on.
+//
+// The ID mirrors the success-finding scheme (one per rule) so two rules reading
+// the same refused endpoint do not collide and get deduplicated away.
+func undeterminedSettingFinding(ruleName, setting, cause string) Finding {
+	return Finding{
+		ID:       "undetermined-" + sanitizeID(ruleName),
+		Rule:     ruleName,
+		Category: ruleCategory(ruleName),
+		Severity: SeverityInfo,
+		Title:    "Could not determine " + setting,
+		Description: "This check did not run because the " + setting + " could not be read: " + cause +
+			". The result is unknown — treat it as unchecked, not as passing.",
+		Location:    "Repository Actions settings",
+		Remediation: "Re-run with a token that has repository admin access (fine-grained `Administration: Read`, or classic PAT `repo`), or review the setting manually under Settings → Actions → General.",
+	}
+}
+
+// undeterminedFindingFor returns a "could not determine" finding when the given
+// setting was not readable, or nil when it was. A non-nil result means the rule
+// must stop rather than evaluate a nil value it cannot interpret.
+func undeterminedFindingFor(facts *ScanFacts, ruleName, setting string) *Finding {
+	cause, ok := facts.ActionsSettings.undeterminedCause(setting)
+	if !ok {
+		return nil
+	}
+	f := undeterminedSettingFinding(ruleName, setting, cause)
+	return &f
+}
+
 func actionsSettingsEnabled(facts *ScanFacts) bool {
 	permissions := facts.ActionsSettings.Permissions
 	if permissions == nil {
@@ -593,6 +631,10 @@ func evaluateAllowedActionsPolicyRule(facts *ScanFacts) []Finding {
 	findings := make([]Finding, 0)
 	findings = appendSettingsAccessFinding(findings, facts)
 
+	if undetermined := undeterminedFindingFor(facts, ruleNameAllowedActionsPolicy, settingAllowedActions); undetermined != nil {
+		return append(findings, *undetermined)
+	}
+
 	permissions := facts.ActionsSettings.Permissions
 	if !actionsSettingsEnabled(facts) || permissions.AllowedActions == nil {
 		return findings
@@ -615,6 +657,10 @@ func evaluateAllowedActionsPolicyRule(facts *ScanFacts) []Finding {
 func evaluateDefaultWorkflowPermissionsRule(facts *ScanFacts) []Finding {
 	findings := make([]Finding, 0)
 	findings = appendSettingsAccessFinding(findings, facts)
+
+	if undetermined := undeterminedFindingFor(facts, ruleNameDefaultWorkflowPermissions, settingWorkflowPermissions); undetermined != nil {
+		return append(findings, *undetermined)
+	}
 
 	perms := facts.ActionsSettings.DefaultWorkflowPermissions
 	if !actionsSettingsEnabled(facts) || perms == nil {
@@ -639,6 +685,10 @@ func evaluateActionsCanApprovePRsRule(facts *ScanFacts) []Finding {
 	findings := make([]Finding, 0)
 	findings = appendSettingsAccessFinding(findings, facts)
 
+	if undetermined := undeterminedFindingFor(facts, ruleNameActionsCanApprovePRs, settingWorkflowPermissions); undetermined != nil {
+		return append(findings, *undetermined)
+	}
+
 	perms := facts.ActionsSettings.DefaultWorkflowPermissions
 	if !actionsSettingsEnabled(facts) || perms == nil || perms.CanApprovePullRequestReviews == nil || !*perms.CanApprovePullRequestReviews {
 		return findings
@@ -659,6 +709,10 @@ func evaluateActionsCanApprovePRsRule(facts *ScanFacts) []Finding {
 func evaluateForkPRContributorApprovalRule(facts *ScanFacts) []Finding {
 	findings := make([]Finding, 0)
 	findings = appendSettingsAccessFinding(findings, facts)
+
+	if undetermined := undeterminedFindingFor(facts, ruleNameForkPRContributorApproval, settingForkPRApproval); undetermined != nil {
+		return append(findings, *undetermined)
+	}
 
 	policy := facts.ActionsSettings.ForkPRContributorApproval
 	if !actionsSettingsEnabled(facts) || policy == nil || policy.ApprovalPolicy == forkPRApprovalAllExternal {

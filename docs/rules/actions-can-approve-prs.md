@@ -56,7 +56,9 @@ Behavior:
 
 - if `can_approve_pull_request_reviews == true`, it creates a medium finding
 - if the value is `false`, it treats that as the desired setting
-- if GitHub returns `403` or `404`, the scanner silently skips this sub-check
+- if GitHub returns `403` or `404`, the value cannot be read and the rule reports an
+  informational `undetermined-*` finding rather than staying silent — an unreadable
+  setting is unknown, not clean
 - if the repository Actions settings endpoint itself cannot be read, the CLI can return an informational `settings-check-unavailable` or `settings-check-failed` finding for this rule
 
 This rule uses the repository Actions settings API, so full scans need fine-grained `Administration: Read` repository permission, or classic PAT `repo`.
