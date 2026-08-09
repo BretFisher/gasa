@@ -87,6 +87,7 @@ See [Build](#build) below for development commands.
 |------|-------|-------------|
 | `--token-stdin` | global | Read GitHub token from stdin |
 | `--config`, `-c` | global | Path to a `gasa` YAML config file |
+| `--no-config` | global | Ignore all config files, including an auto-discovered `.gasa.yml`/`.gasa.yaml` (mutually exclusive with `--config`) |
 | `--format` | global | Output format: `table`, `json`, or `html` |
 | `--timeout` | global | Maximum time for each repo scan or repo-listing call (default `1m`, e.g. `30s`, `2m`) |
 | `--debug` | global | Print single-line diagnostic debug output to stderr while scanning |
@@ -236,6 +237,20 @@ All of `run`'s rule filters (`--rule`, `--category`, `--severity`, `--success`),
 `gasa` will automatically load `.gasa.yml` or `.gasa.yaml` from the current working directory if present. You can also pass a file explicitly with `--config`.
 
 A sample config is available at `.gasa.sample.yaml`. It is not auto-loaded.
+
+Config resolution precedence, highest first:
+
+1. `--no-config` — use no config at all, not even an auto-discovered one
+2. `--config PATH` — load exactly that file, and error if it is missing
+3. auto-discovery of `.gasa.yml` / `.gasa.yaml` in the current directory
+
+`--no-config` is the flag to reach for when you need a scan to run the complete built-in rule set regardless of what config happens to sit in the working directory — comparing two repos, reproducing someone else's report, or asserting rule behavior in tests. Without it, a local `exclude:` list silently shrinks the rule set and the scan looks clean because the rule never ran:
+
+```bash
+gasa run --no-config --success myorg/myrepo
+```
+
+The scan header prints `Config: disabled (--no-config)` so an ignored config is visibly distinct from no config at all.
 
 Current config support includes:
 

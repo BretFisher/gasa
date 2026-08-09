@@ -326,6 +326,7 @@ func TestBuildScanRequest(t *testing.T) {
 				Timeout:        time.Minute,
 				TokenStdin:     true,
 				ConfigPath:     ".gasa.yml",
+				WorkDir:        ".",
 			},
 		},
 		{

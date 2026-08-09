@@ -19,6 +19,7 @@ var Version = "dev"
 var (
 	flagTokenStdin bool
 	flagConfig     string
+	flagNoConfig   bool
 	flagFormat     string
 	flagDebug      bool
 	flagTimeout    time.Duration
@@ -37,6 +38,8 @@ pinning issues, and missing dependency update automation.`,
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&flagTokenStdin, "token-stdin", false, "read GitHub token from stdin")
 	rootCmd.PersistentFlags().StringVarP(&flagConfig, "config", "c", "", "path to gasa YAML config file")
+	rootCmd.PersistentFlags().BoolVar(&flagNoConfig, "no-config", false, "ignore all config files, including auto-discovered .gasa.yml/.gasa.yaml")
+	rootCmd.MarkFlagsMutuallyExclusive("config", "no-config")
 	rootCmd.PersistentFlags().StringVar(&flagFormat, "format", outputFormatTable, "output format: table, json, or html")
 	rootCmd.PersistentFlags().BoolVar(&flagDebug, "debug", false, "print diagnostic debug output to stderr")
 	rootCmd.PersistentFlags().DurationVar(&flagTimeout, "timeout", time.Minute, "maximum time for each repo scan or repo listing operation")

@@ -32,6 +32,7 @@ type scanCommandOptions struct {
 	Timeout        time.Duration
 	TokenStdin     bool
 	ConfigPath     string
+	NoConfig       bool
 	WorkDir        string
 }
 
@@ -47,6 +48,8 @@ type scanRequest struct {
 	Timeout        time.Duration
 	TokenStdin     bool
 	ConfigPath     string
+	NoConfig       bool
+	WorkDir        string
 }
 
 var runCmd = &cobra.Command{
@@ -59,6 +62,7 @@ var runCmd = &cobra.Command{
   gasa run --category workflows owner/repo
   gasa run --severity critical,high owner/repo
   gasa run --success owner/repo
+  gasa run --no-config owner/repo
   gasa run --format json owner/repo
   gasa run --format html owner/repo > report.html
   printf '%s' "$GITHUB_TOKEN" | gasa run --token-stdin owner/repo`,
@@ -87,6 +91,7 @@ func runScan(cmd *cobra.Command, args []string) error {
 		Timeout:        flagTimeout,
 		TokenStdin:     flagTokenStdin,
 		ConfigPath:     flagConfig,
+		NoConfig:       flagNoConfig,
 		WorkDir:        ".",
 	})
 	if err != nil {
@@ -96,14 +101,7 @@ func runScan(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(cmd.Context(), req.Timeout)
 	defer cancel()
 
-	var cfg *scanner.Config
-	loadedConfigPath := ""
-	if req.ConfigPath != "" {
-		cfg, err = scanner.LoadConfig(req.ConfigPath)
-		loadedConfigPath = req.ConfigPath
-	} else {
-		cfg, loadedConfigPath, err = scanner.LoadConfigFromDir(".")
-	}
+	cfg, loadedConfigPath, err := resolveScanConfig(req.ConfigPath, req.NoConfig, req.WorkDir)
 	if err != nil {
 		return err
 	}
@@ -185,6 +183,8 @@ func buildScanRequest(ctx context.Context, args []string, opts scanCommandOption
 		Timeout:        opts.Timeout,
 		TokenStdin:     opts.TokenStdin,
 		ConfigPath:     opts.ConfigPath,
+		NoConfig:       opts.NoConfig,
+		WorkDir:        opts.WorkDir,
 	}, nil
 }
 

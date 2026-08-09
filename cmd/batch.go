@@ -59,6 +59,7 @@ type batchCommandOptions struct {
 	Timeout         time.Duration
 	TokenStdin      bool
 	ConfigPath      string
+	NoConfig        bool
 }
 
 type batchRequest struct {
@@ -76,6 +77,7 @@ type batchRequest struct {
 	Timeout         time.Duration
 	TokenStdin      bool
 	ConfigPath      string
+	NoConfig        bool
 }
 
 var batchCmd = &cobra.Command{
@@ -138,6 +140,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 		Timeout:         flagTimeout,
 		TokenStdin:      flagTokenStdin,
 		ConfigPath:      flagConfig,
+		NoConfig:        flagNoConfig,
 	})
 	if err != nil {
 		return err
@@ -156,14 +159,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load config
-	var cfg *scanner.Config
-	var loadedConfigPath string
-	if req.ConfigPath != "" {
-		cfg, err = scanner.LoadConfig(req.ConfigPath)
-		loadedConfigPath = req.ConfigPath
-	} else {
-		cfg, loadedConfigPath, err = scanner.LoadConfigFromDir(".")
-	}
+	cfg, loadedConfigPath, err := resolveScanConfig(req.ConfigPath, req.NoConfig, ".")
 	if err != nil {
 		return err
 	}
@@ -269,6 +265,7 @@ func buildBatchRequest(args []string, opts batchCommandOptions) (batchRequest, e
 		Timeout:         opts.Timeout,
 		TokenStdin:      opts.TokenStdin,
 		ConfigPath:      opts.ConfigPath,
+		NoConfig:        opts.NoConfig,
 	}, nil
 }
 
