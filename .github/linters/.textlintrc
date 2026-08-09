@@ -6,15 +6,13 @@
     "terminology": {
       "defaultTerms": true,
       "exclude": [
-        "[Rr]epo\\b",
-        "[Rr]epos\\b",
+        "repo\\b",
+        "readme(s)?",
+        "ID",
         "e2e",
-        "E2E",
-        "README",
-        "[Rr]egex",
-        "id",
-        "end to end",
-        "github-actions"
+        "end ?to ?end",
+        "end[- ]?2[- ]?end",
+        "regexp?(s)?"
       ]
     }
   }
