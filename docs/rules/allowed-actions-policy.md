@@ -13,7 +13,7 @@ messages:
       This repository allows all GitHub Actions to run without restriction. This
       means any public action can be used, including potentially malicious ones.
     fix: >-
-      Restrict allowed actions to 'selected' and specify trusted action sources.
+      Restrict allowed actions to `selected` and specify trusted action sources.
       Go to Settings > Actions > General > Actions permissions.
   pass-disabled:
     title: GitHub Actions are disabled for this repository
@@ -33,14 +33,6 @@ messages:
 ---
 
 # Allowed Actions Policy
-
-| | |
-|---|---|
-| **Severity** | Medium |
-| **Check ID** | `actions_settings` |
-| **Auth required** | Yes |
-| **Minimum fine-grained permission** | `Administration: Read` |
-| **Classic PAT** | `repo` |
 
 ## What it checks
 

@@ -5,7 +5,7 @@ title: Update Tool Configuration
 category: Updates
 severity: medium
 aliases: [update-tool-configuration, update-tool]
-description: no dependency update tool configured (Dependabot or Renovate), invalid config, or missing github-actions coverage
+description: no dependency update tool configured (Dependabot or Renovate), invalid config, or missing GitHub Actions coverage
 messages:
   no-tool:
     title: No dependency update tool configured
@@ -32,16 +32,19 @@ messages:
       configured to update them. Action versions will not be automatically kept
       up to date.
     fix: |-
-      Configure your update tool to track the github-actions ecosystem.
+      Configure your update tool to track the GitHub Actions ecosystem.
 
-      Dependabot (.github/dependabot.yml):
+      Dependabot:
+        ```yaml
         - package-ecosystem: "github-actions"
           directory: "/"
           schedule:
             interval: "weekly"
 
-      Renovate (renovate.json / .github/renovate.json):
+      Renovate:
+        ```json
         { "enabledManagers": ["github-actions"] }
+        ```
         (or omit enabledManagers entirely — Renovate auto-detects github-actions)
   pass:
     title: Dependency update tool is configured correctly
@@ -52,17 +55,11 @@ messages:
 
 # Update Tool Configuration
 
-| | |
-|---|---|
-| **Severity** | Medium |
-| **Rule name** | `updates/update-tool-configuration` |
-| **Aliases** | `update-tool-configuration`, `update-tool` |
-
 ## What it checks
 
 - whether `.github/dependabot.yml` / `.github/dependabot.yaml` (Dependabot) or any supported Renovate config file exists
 - whether the found config file parses successfully
-- whether at least one tool covers the `github-actions` ecosystem when workflow files exist
+- whether at least one tool covers the GitHub Actions ecosystem when workflow files exist
 
 The rule **passes** if either Dependabot or Renovate satisfies all of the above conditions. Teams can use one or both tools.
 
@@ -94,14 +91,14 @@ Decision logic:
 - if both tools are missing → `no-update-tool` (medium)
 - if Dependabot is present but YAML is invalid and Renovate is not valid → `invalid-dependabot` (medium)
 - if Renovate is present but JSON is invalid and Dependabot is not valid → `invalid-renovate` (medium)
-- if at least one tool is valid and workflows exist but neither covers `github-actions` → `update-tool-missing-actions` (medium)
+- if at least one tool is valid and workflows exist but neither covers GitHub Actions → `update-tool-missing-actions` (medium)
 
 The scanner strips `//` and `/* */` comments from Renovate `.json5` files before parsing so that
 common real-world configs with inline comments are handled correctly.
 
-For Renovate's `github-actions` coverage: if `enabledManagers` is absent or empty, Renovate
+For Renovate's GitHub Actions coverage: if `enabledManagers` is absent or empty, Renovate
 auto-detects all package managers (including `github-actions`), so the rule passes. Only when
-`enabledManagers` is explicitly set must `"github-actions"` appear in the list.
+`enabledManagers` is explicitly set must `github-actions` appear in the list.
 
 Optional config behavior:
 
@@ -122,7 +119,7 @@ catch vulnerable or malicious releases before they persist indefinitely in the c
 ## Bad examples
 
 ```text
-# Neither .github/dependabot.yml nor any renovate.json* file present
+# Neither `.github/dependabot.yml` nor any `renovate.json*` file present
 ```
 
 ```yaml
@@ -156,7 +153,7 @@ updates:
 }
 ```
 
-**Renovate (implicit — auto-detects all managers including github-actions):**
+**Renovate (implicit — auto-detects all managers including GitHub Actions):**
 
 ```json
 {

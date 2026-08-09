@@ -10,9 +10,9 @@ messages:
   unpinned:
     title: "Unpinned Action: {{.Action}}"
     description: >-
-      This action uses a mutable reference '{{.Ref}}'. Tags and branches can be
+      This action uses a mutable reference `{{.Ref}}`. Tags and branches can be
       moved, potentially introducing malicious code.
-    fix: Pin to a specific commit SHA instead of '{{.Ref}}'.
+    fix: Pin to a specific commit SHA instead of `{{.Ref}}`.
   pass:
     title: Action versions are pinned safely
     description: >-
@@ -21,11 +21,6 @@ messages:
 ---
 
 # Action Version Pinning
-
-| | |
-|---|---|
-| **Severity** | High |
-| **Check ID** | `action_pinning` |
 
 ## What it checks
 
@@ -37,7 +32,7 @@ The scanner:
 
 - lists workflow files from `.github/workflows`
 - fetches each file with `GET /repos/{owner}/{repo}/contents/{path}`
-- scans raw workflow text with this regex: `^\s*-?\s*uses:\s*['"]?([^'"@\s]+)@([^'"@\s]+)['"]?`
+- scans raw workflow text with this regular expression: `^\s*-?\s*uses:\s*['"]?([^'"@\s]+)@([^'"@\s]+)['"]?`
 - extracts the action name and version from every `uses:` line
 - skips:
   - local actions starting with `./`
@@ -89,7 +84,7 @@ file is SHA-pinned, Dependabot and Renovate preserve that style on update PRs.
 |---|---|---|
 | [pinact](https://github.com/suzuki-shunsuke/pinact) | MIT | CLI that pins `uses:` references in workflow and composite action files to commit SHAs. Also supports version updates, version-comment verification, offline checks, and SARIF output. Best fit if you only target GitHub Actions. |
 | [ratchet](https://github.com/sethvargo/ratchet) | Apache-2.0 | CLI that pins (and unpins) versions across CI/CD systems: GitHub Actions, GitLab CI, Circle CI, Google Cloud Build, Drone, Tekton. Best fit if you also need to pin non-GitHub pipelines. |
-| [step-security/secure-repo](https://github.com/step-security/secure-repo) | AGPL-3.0 | Opens hardening PRs against your repo. Pins actions to SHAs and also applies other fixes: minimum `GITHUB_TOKEN` permissions, Harden-Runner, Docker digest pinning, Dependabot config, SAST workflows. Hosted instance at [app.stepsecurity.io/securerepo](https://app.stepsecurity.io/securerepo). |
+| [step-security/secure-repo](https://github.com/step-security/secure-repo) | AGPL-3.0 | Opens hardening PRs against your repository. Pins actions to SHAs and also applies other fixes: minimum `GITHUB_TOKEN` permissions, Harden-Runner, Docker digest pinning, Dependabot config, SAST workflows. Hosted instance at [app.stepsecurity.io/securerepo](https://app.stepsecurity.io/securerepo). |
 
 A practical workflow: run `pinact` or `ratchet` once locally, commit the pinned
 workflows, and let Dependabot/Renovate maintain the SHAs going forward. See

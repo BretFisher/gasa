@@ -10,20 +10,24 @@ messages:
   not-pinning:
     title: Renovate not configured to pin GitHub Actions to commit SHAs
     description: >-
-      Renovate covers the github-actions ecosystem but is not configured to pin
+      Renovate covers the GitHub Actions ecosystem but is not configured to pin
       actions to immutable commit SHAs. Pinning to a SHA prevents a compromised
       or re-tagged action version from introducing malicious code into your
       workflows.
     fix: |-
-      Enable digest pinning in Renovate (renovate.json / .github/renovate.json).
+      Enable digest pinning in Renovate.
 
       Top level:
+        ```json
         { "pinDigests": true }
+        ```
 
       Or via preset:
+        ```json
         { "extends": ["helpers:pinGitHubActionDigests"] }
+        ```
 
-      Dependabot has no equivalent option (see https://github.com/dependabot/dependabot-core/issues/7913). For Dependabot-only repos, the action_pinning rule verifies workflow-level SHA pins directly.
+      Dependabot has no equivalent option (see https://github.com/dependabot/dependabot-core/issues/7913). For Dependabot-only repos, the `action_pinning` rule verifies workflow-level SHA pins directly.
   pass:
     title: Renovate is configured to pin GitHub Actions to commit SHAs
     description: >-
@@ -34,12 +38,6 @@ messages:
 
 # Renovate GitHub Actions Pinning
 
-| | |
-|---|---|
-| **Severity** | Medium |
-| **Rule name** | `updates/update-tool-actions-pinning` |
-| **Aliases** | `update-tool-actions-pinning`, `actions-pinning` |
-
 ## What it checks
 
 Whether Renovate's config is configured to pin GitHub Action references to
@@ -48,7 +46,7 @@ immutable commit SHAs.
 ## How the scanner evaluates it
 
 This rule only runs when Renovate is validly configured **and** covers the
-`github-actions` ecosystem (via `enabledManagers` or default coverage).
+GitHub Actions ecosystem (via `enabledManagers` or default coverage).
 
 Renovate pinning is detected when **any** of the following is true:
 
@@ -108,7 +106,7 @@ commit. Committing to a SHA ensures you get exactly the code that was reviewed.
 }
 ```
 
-**Renovate — packageRule scoped to github-actions:**
+**Renovate — packageRule scoped to GitHub Actions:**
 
 ```json
 {

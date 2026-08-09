@@ -1,0 +1,51 @@
+###########################
+###########################
+## Markdown Linter rules ##
+###########################
+###########################
+
+# Linter rules doc:
+# - https://github.com/DavidAnson/markdownlint
+#
+# Note:
+# To comment out a single error:
+#   <!-- markdownlint-disable -->
+#   any violations you want
+#   <!-- markdownlint-restore -->
+#
+# Filename is `.markdown-lint.yml` so super-linter auto-discovers it in
+# .github/linters/ (its default LINTER_RULES_PATH); `make lint-md` points the
+# local markdownlint CLI at this same file so CI and local share one config.
+
+###############
+# Rules by id #
+###############
+# --- Upstream super-linter defaults (TEMPLATES/.markdown-lint.yml) ---
+MD004: false # Unordered list style
+MD007:
+  indent: 2 # Unordered list indentation
+MD013:
+  line_length: 400 # Line length 80 is far too short
+MD026:
+  punctuation: ".,;:!。，；:" # List of not allowed
+MD029: false # Ordered list item prefix
+MD033: false # Allow inline HTML
+MD036: false # Emphasis used instead of a heading
+
+# --- Repo-specific additions ---
+# MD025 (single H1): every rule page in docs/rules/ carries YAML front-matter
+# with a `title:` field AND a body `# Heading`. By default markdownlint treats
+# the front-matter title as the document H1, so the body heading reads as a
+# second H1. Clearing front_matter_title stops front-matter from counting as a
+# heading, so the body `# Heading` is correctly the single top-level heading.
+MD025:
+  front_matter_title: ""
+# MD060 (table-column-style): a very new, opinionated rule about table pipe
+# padding that conflicts with ordinary GitHub-flavored tables. GitHub renders
+# the tables fine, so it is disabled to avoid churn.
+MD060: false
+
+#################
+# Rules by tags #
+#################
+blank_lines: false # Error on blank lines

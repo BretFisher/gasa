@@ -1,15 +1,24 @@
 # GitHub Actions Security Assessment
 
-A CLI tool that scans GitHub repositories for Actions security-related misconfigurations. It checks your workflows, repo settings, and dependency tooling against recommended security practices and tells you exactly what to fix.
+Gasa (gas-ah) is a CLI tool that scans GitHub repositories for Actions security-related misconfigurations. It checks your workflows, repo settings, and dependency tooling against recommended security practices and tells you exactly what to fix.
 
-You can scan single repos or entire users and orgs. You can control which rules it runs and the type of output (table, json, or html). Rules have docs and remediation help.
+**This tool compliments existing linters and scanners like
+[actionlint](https://github.com/rhysd/actionlint),
+[zizmor](https://github.com/zizmorcore/zizmor),
+[poutine](https://github.com/boostsecurityio/poutine), dependabot, and renovate
+by focusing on the most commonly exploited settings, how one might affect
+another, and combines that with checking repository settings that those scanners
+don't cover.** It's most useful when run by repository maintainers with at least
+read-only admin access.
 
-You can use it as a downloadable CLI, a Docker container, or a GitHub Action. It can do a partical check on a 3rd-party public repository, but for a full settings check it'll need at least read-only admin access, which if your local `gh` cli is logged in, it'll use that to check your repository settings.
+**You can scan single repositories or entire users and orgs.** You can control which rules it runs and the type of output (table, json, or html). Rules have docs and remediation help.
 
-This tool is only concerned with GitHub Actions security best practices, and goes beyond the workflow yaml to help repo owners, partically open source maintainers, validate that their workflows, settings, and Dependabot/Renovate configs are providing a safe Actions environment.
+You can use it as a downloadable CLI or a container. It can do a partial check on a 3rd-party public repository, but for a full settings check it'll need at least read-only admin access, which if your local `gh` cli is logged in, it'll use that to check your repository settings.
+
+**Gasa is only concerned with GitHub Actions security best practices, and goes beyond the workflow yaml to help repo owners, particularly open source maintainers, validate that their workflows, settings, and Dependabot/Renovate configs are providing a safe Actions environment.
 
 > [!WARNING]
-> Don't run `gasa` as a GitHub Actions workflow on a public repo — the findings report would be public, which is likely the last thing you want for a security report. A future feature will report findings to the GitHub Security tab to keep them private.
+> **Don't run `gasa` as a GitHub Actions workflow on a public repo** — the admin settings findings report would be public, which is likely the last thing you want for a security report. A future feature will report findings to the GitHub Security tab to keep them private.
 
 ## Quick Start
 
@@ -28,7 +37,7 @@ gasa batch mostlydevops --format json
 
 ## Install
 
-Pick whichever fits your environment. All methods install the same `gasa` binary.
+Gasa is a single binary.
 
 ### Homebrew (macOS / Linux)
 
@@ -47,8 +56,6 @@ docker run --rm ghcr.io/bretfisher/gasa:latest run bretfisher/gasa
 # pass a token for full settings checks
 docker run --rm -e GITHUB_TOKEN ghcr.io/bretfisher/gasa:latest run myorg/myrepo
 ```
-
-Pin a version with a tag like `ghcr.io/bretfisher/gasa:v0.3.0` instead of `latest`.
 
 ### Pre-built binary download
 
@@ -393,9 +400,10 @@ make build
 Useful development commands:
 
 ```bash
-make test   # runs the suite with -race -shuffle=on (the CI gate)
-make cover  # writes coverage.out + coverage.html
-make lint   # golangci-lint
+make test    # runs the suite with -race -shuffle=on (the CI gate)
+make cover   # writes coverage.out + coverage.html
+make lint    # golangci-lint
+make lint-md # markdownlint (all *.md)
 make fmt
 make deps
 ```

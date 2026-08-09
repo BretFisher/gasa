@@ -14,8 +14,8 @@ messages:
       permissions which may be overly broad (often read-write access to all
       scopes).
     fix: >-
-      Add a 'permissions:' block at the workflow or job level with minimal
-      required permissions. Start with 'permissions: {}' (no permissions) and add
+      Add a `permissions:` block at the workflow or job level with minimal
+      required permissions. Start with `permissions: {}` (no permissions) and add
       only what's needed.
   pass:
     title: Workflow permissions are explicit
@@ -25,11 +25,6 @@ messages:
 ---
 
 # Workflow Permissions
-
-| | |
-|---|---|
-| **Severity** | High |
-| **Check ID** | `workflow_permissions` |
 
 ## What it checks
 
