@@ -48,7 +48,7 @@ There are two extraction paths:
    text, a `uses:` string appearing in a comment or inside a `run:` block is not mistaken
    for a real reference.
 2. **Regex fallback.** When the YAML fails to parse, the scanner scans the raw text with
-   `^\s*-?\s*uses:\s*['"]?([^'"@\s]+)@([^'"@\s]+)['"]?` so an unparseable workflow still
+   `^\s*-?\s*uses:\s*['"]?([^'"@\s]+)@([^'"@\s]+)['"]?` so an unparsable workflow still
    gets pinning coverage instead of being skipped entirely.
 
 Both paths skip:
