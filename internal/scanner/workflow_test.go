@@ -1,9 +1,11 @@
 package scanner
 
 import (
+	"context"
 	"strings"
 	"testing"
 
+	"github.com/google/go-github/v84/github"
 	"gopkg.in/yaml.v3"
 )
 
@@ -180,6 +182,45 @@ func TestHasExplicitPermissions(t *testing.T) {
 	none := &WorkflowFile{}
 	if hasExplicitPermissions(none) {
 		t.Fatal("empty workflow should not be explicit")
+	}
+}
+
+// Every workflow rule skips files it could not parse, so a repository whose
+// only workflow is unparseable produces zero findings. Without an incomplete
+// marker that is indistinguishable from a clean scan — a pass for a file nobody
+// checked. The parse error used to surface only under --debug.
+func TestCollectWorkflowFacts_UnparseableWorkflowMarksScanIncomplete(t *testing.T) {
+	s, mux := newTestScanner(t, false)
+	handleJSON(mux, "/repos/owner/repo/contents/.github/workflows", []*github.RepositoryContent{{
+		Path: github.Ptr(".github/workflows/broken.yml"),
+		Name: github.Ptr("broken.yml"),
+	}})
+	handleJSON(mux, "/repos/owner/repo/contents/.github/workflows/broken.yml",
+		encodedContent(".github/workflows/broken.yml", "jobs:\n  build: [\n    steps:\n"))
+
+	collector := newTestFactCollector(s)
+	workflows := collector.collectWorkflowFacts(context.Background(), "owner", "repo", nil)
+
+	// The file is still collected — action-version-pinning falls back to its
+	// regex path for unparseable YAML — but it is not marked Valid.
+	if len(workflows) != 1 || workflows[0].Valid {
+		t.Fatalf("workflows = %+v, want one collected but invalid workflow", workflows)
+	}
+	if len(collector.warnings) != 1 {
+		t.Fatalf("warnings = %+v, want one parse warning", collector.warnings)
+	}
+	if !strings.Contains(collector.warnings[0].Area, "broken.yml") {
+		t.Fatalf("warning should name the file, got %+v", collector.warnings[0])
+	}
+
+	// The rules that require a parsed workflow stay quiet, which is exactly why
+	// the warning above has to exist.
+	facts := &ScanFacts{Workflows: workflows}
+	if findings := evaluateDangerousWorkflowRule(facts); len(findings) != 0 {
+		t.Fatalf("dangerous-trigger findings = %+v, want none for an unparsed file", findings)
+	}
+	if findings := evaluateWorkflowPermissionsRule(facts); len(findings) != 0 {
+		t.Fatalf("workflow-permissions findings = %+v, want none for an unparsed file", findings)
 	}
 }
 
