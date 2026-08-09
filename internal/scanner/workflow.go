@@ -158,6 +158,17 @@ func parseAndAddWorkflowFile(ctx context.Context, file *github.RepositoryContent
 		if dbg != nil {
 			dbg(repoFull, "workflow parsed OK: "+*file.Path)
 		}
+		// Parses as YAML but defines no jobs, so it is not a workflow GitHub
+		// would ever run — usually a stray config file sitting in
+		// .github/workflows. The workflow rules cannot say anything meaningful
+		// about it, so record it rather than let it drop out of the report
+		// unmentioned.
+		if len(workflow.Jobs) == 0 {
+			c.addWarning("workflow "+*file.Path, "defines no jobs — not a runnable workflow, so workflow rules were not applied")
+			if dbg != nil {
+				dbg(repoFull, "workflow has no jobs: "+*file.Path)
+			}
+		}
 	} else {
 		// Every workflow rule skips files it could not parse. Left unrecorded,
 		// a repository whose workflows all fail to parse produces zero findings

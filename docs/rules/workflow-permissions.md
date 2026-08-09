@@ -51,6 +51,10 @@ The scanner:
   - top-level `permissions` exists, or
   - every job has its own `permissions`
 - flags the workflow if neither condition is true
+- skips files that define no jobs, since they are not runnable workflows — usually a stray
+  config file in `.github/workflows`. These are reported as an incomplete-scan warning
+  instead, because "this file is not a workflow" is a different problem from "this workflow
+  is missing a permissions block"
 
 This is a structural check only. It verifies that permissions are explicit, not whether each permission set is perfectly minimal.
 

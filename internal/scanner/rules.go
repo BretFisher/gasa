@@ -653,6 +653,14 @@ func evaluateWorkflowPermissionsRule(facts *ScanFacts) []Finding {
 		if !wf.Valid || hasExplicitPermissions(wf.Workflow) {
 			continue
 		}
+		// A file with no jobs is not a workflow GitHub would ever run — most
+		// often a stray config file parked in .github/workflows. Reporting
+		// "No explicit permissions defined" at high severity misdiagnoses it:
+		// the problem is the file, not its permissions block. Skip it and let
+		// the parse/validity checks own that case.
+		if wf.Workflow != nil && len(wf.Workflow.Jobs) == 0 {
+			continue
+		}
 		msg := ruleMessage(ruleNameWorkflowPermissions, "no-permissions", nil)
 		findings = append(findings, Finding{
 			ID:          fmt.Sprintf("no-permissions-%s", wf.Path),
