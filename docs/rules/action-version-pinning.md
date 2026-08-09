@@ -25,7 +25,8 @@ messages:
 | | |
 |---|---|
 | **Severity** | High |
-| **Check ID** | `action_pinning` |
+| **Rule name** | `workflows/action-version-pinning` |
+| **Aliases** | `action-version-pinning`, `action-pinning`, `pinning` |
 
 ## What it checks
 
@@ -37,12 +38,27 @@ The scanner:
 
 - lists workflow files from `.github/workflows`
 - fetches each file with `GET /repos/{owner}/{repo}/contents/{path}`
-- scans raw workflow text with this regex: `^\s*-?\s*uses:\s*['"]?([^'"@\s]+)@([^'"@\s]+)['"]?`
-- extracts the action name and version from every `uses:` line
-- skips:
-  - local actions starting with `./`
-  - Docker-based actions starting with `docker://`
-- flags any reference whose version is not a 40-character hex SHA
+- extracts every action reference, then flags any whose version is not a full commit SHA
+
+There are two extraction paths:
+
+1. **Parsed workflow (the normal path).** When the YAML parses, the scanner walks the
+   parsed structure and inspects every `jobs.<job_id>.steps[].uses` plus each
+   `jobs.<job_id>.uses` (reusable workflow calls). Because it reads structure rather than
+   text, a `uses:` string appearing in a comment or inside a `run:` block is not mistaken
+   for a real reference.
+2. **Regex fallback.** When the YAML fails to parse, the scanner scans the raw text with
+   `^\s*-?\s*uses:\s*['"]?([^'"@\s]+)@([^'"@\s]+)['"]?` so an unparsable workflow still
+   gets pinning coverage instead of being skipped entirely.
+
+Both paths skip:
+
+- local actions starting with `./`
+- Docker-based actions starting with `docker://`
+
+A reference counts as pinned when its version is a hex SHA of 40 characters (SHA-1) or 64
+characters (SHA-256, accepted for forward compatibility). Anything else — a tag, a branch,
+a short SHA — is treated as unpinned.
 
 Optional config behavior:
 
