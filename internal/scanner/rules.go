@@ -603,7 +603,13 @@ func evaluateActionVersionPinningRule(facts *ScanFacts) []Finding {
 				"Ref":    action.version,
 			})
 			findings = append(findings, Finding{
-				ID:          fmt.Sprintf("unpinned-%s-%s", wf.Path, sanitizeID(action.name)),
+				// The ref is part of the ID because one file can reference the
+				// same action at two different mutable refs — actions/checkout@v4
+				// in one job and @v3 in another. Keying on path+name alone made
+				// those two findings share an ID, and dedupeFindings silently
+				// dropped the second: a real unpinned action disappearing from
+				// the report because a sibling finding got there first.
+				ID:          fmt.Sprintf("unpinned-%s-%s-%s", wf.Path, sanitizeID(action.name), sanitizeID(action.version)),
 				Severity:    SeverityHigh,
 				Title:       msg.Title,
 				Description: msg.Description,

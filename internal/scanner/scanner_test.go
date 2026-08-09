@@ -479,14 +479,14 @@ func TestScanRepo_EndToEndMixedFindings(t *testing.T) {
 	}
 
 	wantIDs := map[string]bool{
-		"dangerous-trigger-.github/workflows/ci.yml":           false,
-		"unpinned-.github/workflows/ci.yml-actions-checkout":   false,
-		"no-permissions-.github/workflows/ci.yml":              false,
-		"settings-all-actions-allowed":                         false,
-		"settings-default-permissions-write":                   false,
-		"settings-actions-can-approve-prs":                     false,
-		"settings-fork-pr-contributor-approval-too-permissive": false,
-		"update-tool-missing-actions":                          false,
+		"dangerous-trigger-.github/workflows/ci.yml":            false,
+		"unpinned-.github/workflows/ci.yml-actions-checkout-v4": false,
+		"no-permissions-.github/workflows/ci.yml":               false,
+		"settings-all-actions-allowed":                          false,
+		"settings-default-permissions-write":                    false,
+		"settings-actions-can-approve-prs":                      false,
+		"settings-fork-pr-contributor-approval-too-permissive":  false,
+		"update-tool-missing-actions":                           false,
 	}
 	for _, finding := range result.Findings {
 		if _, ok := wantIDs[finding.ID]; ok {

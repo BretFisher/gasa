@@ -224,6 +224,40 @@ func TestCollectWorkflowFacts_UnparseableWorkflowMarksScanIncomplete(t *testing.
 	}
 }
 
+// One file can reference the same action at two different mutable refs. The
+// finding ID keyed only on path+action name, so both findings collided and
+// dedupeFindings dropped the second — a real unpinned action vanishing from the
+// report because a sibling got there first.
+func TestEvaluateActionVersionPinningRule_SameActionTwoRefsBothReported(t *testing.T) {
+	content := `jobs:
+  build:
+    steps:
+      - uses: actions/checkout@v4
+  release:
+    steps:
+      - uses: actions/checkout@v3
+`
+	workflow := &WorkflowFile{}
+	if err := yaml.Unmarshal([]byte(content), workflow); err != nil {
+		t.Fatalf("yaml.Unmarshal() error: %v", err)
+	}
+
+	facts := &ScanFacts{Workflows: []WorkflowFact{{
+		Path:     ".github/workflows/ci.yml",
+		Content:  content,
+		Workflow: workflow,
+		Valid:    true,
+	}}}
+
+	findings := dedupeFindings(evaluateActionVersionPinningRule(facts))
+	if len(findings) != 2 {
+		t.Fatalf("findings = %+v, want both unpinned refs reported", findings)
+	}
+	if findings[0].ID == findings[1].ID {
+		t.Fatalf("finding IDs collide (%q); dedupe would drop one", findings[0].ID)
+	}
+}
+
 func TestEvaluateWorkflowRules_Integration(t *testing.T) {
 	content := "on: pull_request_target\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n"
 	workflow := &WorkflowFile{}
