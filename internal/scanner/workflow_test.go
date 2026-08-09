@@ -186,7 +186,7 @@ func TestHasExplicitPermissions(t *testing.T) {
 }
 
 // Every workflow rule skips files it could not parse, so a repository whose
-// only workflow is unparseable produces zero findings. Without an incomplete
+// only workflow is unparsable produces zero findings. Without an incomplete
 // marker that is indistinguishable from a clean scan — a pass for a file nobody
 // checked. The parse error used to surface only under --debug.
 func TestCollectWorkflowFacts_UnparseableWorkflowMarksScanIncomplete(t *testing.T) {
@@ -202,7 +202,7 @@ func TestCollectWorkflowFacts_UnparseableWorkflowMarksScanIncomplete(t *testing.
 	workflows := collector.collectWorkflowFacts(context.Background(), "owner", "repo", nil)
 
 	// The file is still collected — action-version-pinning falls back to its
-	// regex path for unparseable YAML — but it is not marked Valid.
+	// regex path for unparsable YAML — but it is not marked Valid.
 	if len(workflows) != 1 || workflows[0].Valid {
 		t.Fatalf("workflows = %+v, want one collected but invalid workflow", workflows)
 	}
