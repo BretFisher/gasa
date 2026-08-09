@@ -40,6 +40,7 @@ const (
 	findingIDInvalidDependabot        = "invalid-dependabot"
 	findingIDMissingActionsUpdateTool = "update-tool-missing-actions"
 	findingIDMissingActionsCooldown   = "update-tool-actions-missing-cooldown"
+	findingIDActionsNotPinning        = "update-tool-actions-not-pinning"
 
 	// File paths
 	defaultDependabotPath = ".github/dependabot.yml"

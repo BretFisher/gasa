@@ -463,18 +463,13 @@ func evaluateUpdateToolActionsPinningFacts(facts *ScanFacts) []Finding {
 	dep := facts.Dependabot
 	ren := facts.Renovate
 
-	renOK := !ren.Missing && ren.Invalid == nil && ren.Config != nil
-	if !renOK || !renovateCoversActions(ren.Config) {
-		return nil
-	}
-
-	if renovatePinningConfigured(ren.Config) {
+	if actionsPinningState(dep, ren) != actionsPinningNotConfigured {
 		return nil
 	}
 
 	msg := ruleMessage(ruleNameUpdateToolActionsPinning, "not-pinning", nil)
 	return []Finding{{
-		ID:          "update-tool-actions-not-pinning",
+		ID:          findingIDActionsNotPinning,
 		Severity:    SeverityMedium,
 		Title:       msg.Title,
 		Description: msg.Description,
@@ -483,16 +478,102 @@ func evaluateUpdateToolActionsPinningFacts(facts *ScanFacts) []Finding {
 	}}
 }
 
+// actionsPinningState is the shared verdict for the update-tool-actions-pinning
+// rule, used by both the finding path and the success path so the two can never
+// disagree about what "pinning is configured" means.
+type actionsPinningVerdict int
+
+const (
+	// actionsPinningNotApplicable means no configured update tool covers the
+	// github-actions ecosystem, so there is nothing to keep pinned. The
+	// update-tool-configuration rule already reports that absence; this rule
+	// stays silent rather than double-reporting it.
+	actionsPinningNotApplicable actionsPinningVerdict = iota
+	// actionsPinningConfigured means at least one tool will keep GitHub Action
+	// SHAs current.
+	actionsPinningConfigured
+	// actionsPinningNotConfigured means a tool covers github-actions but
+	// nothing will maintain SHA pins.
+	actionsPinningNotConfigured
+)
+
+// actionsPinningState decides whether the repository's update tooling will keep
+// GitHub Action SHA pins current.
+//
+// Either tool can satisfy this, for different reasons:
+//
+//   - Dependabot has no pinning option at all; it preserves whatever reference
+//     style a workflow already uses. A github-actions entry is therefore
+//     sufficient here — on a SHA-pinned repository Dependabot keeps the SHAs
+//     moving. Whether the workflows are pinned in the first place is the
+//     action-version-pinning rule's job, and this rule deliberately does not
+//     depend on that rule's outcome; rules stand alone.
+//   - Renovate does have an explicit option, so it satisfies this rule only
+//     when digest pinning is actually enabled.
+func actionsPinningState(dep DependabotFacts, ren RenovateFacts) actionsPinningVerdict {
+	depOK := !dep.Missing && dep.Invalid == nil && dep.Config != nil
+	renOK := !ren.Missing && ren.Invalid == nil && ren.Config != nil
+
+	depCoversActions := depOK && dependabotCoversActions(dep.Config)
+	renCoversActions := renOK && renovateCoversActions(ren.Config)
+
+	if !depCoversActions && !renCoversActions {
+		return actionsPinningNotApplicable
+	}
+	if depCoversActions {
+		return actionsPinningConfigured
+	}
+	if renovatePinningConfigured(ren.Config) {
+		return actionsPinningConfigured
+	}
+	return actionsPinningNotConfigured
+}
+
+// renovateActionPinningPresets lists the built-in Renovate presets that enable
+// GitHub Action digest pinning, either directly or by extending a preset that
+// does.
+//
+// Renovate presets inherit, and this scanner does not fetch and expand preset
+// definitions at scan time — doing so would mean network calls to Renovate's
+// preset registry on every scan. Instead the small set of built-ins that imply
+// action pinning is listed here explicitly.
+//
+// `config:best-practices` is the one that matters in practice: it is Renovate's
+// own recommended starting configuration and it extends
+// `helpers:pinGitHubActionDigests`. Matching only the literal helper names
+// meant every repository using the recommended config was reported as not
+// pinning, which was exactly backwards.
+//
+// Source of truth: https://docs.renovatebot.com/presets-config/ — re-check this
+// list when Renovate changes its built-in preset definitions.
+// renovatePresetBestPractices is Renovate's recommended starting configuration.
+// It extends helpers:pinGitHubActionDigests, which is why it counts as pinning.
+const renovatePresetBestPractices = "config:best-practices"
+
+var renovateActionPinningPresets = map[string]bool{
+	"helpers:pinGitHubActionDigests":         true,
+	"helpers:pinGitHubActionDigestsToSemver": true,
+	renovatePresetBestPractices:              true,
+}
+
 // renovatePinningConfigured returns true when:
 //   - the top-level pinDigests is true, OR
-//   - extends includes helpers:pinGitHubActionDigests or helpers:pinGitHubActionDigestsToSemver, OR
+//   - extends includes a preset that enables GitHub Action digest pinning
+//     (directly or transitively — see renovateActionPinningPresets), OR
 //   - any packageRules entry has pinDigests: true
+//
+// Known limitation: a custom or remote preset (`github>org/renovate-config`,
+// `local>org/preset`) cannot be resolved without fetching it, so a repository
+// that enables pinning only inside such a preset is still reported as not
+// pinning. Treating unresolvable presets as "probably pinning" would turn a
+// false positive into a false negative, which is the worse failure for a
+// security scanner, so the conservative direction is kept deliberately.
 func renovatePinningConfigured(cfg *RenovateConfig) bool {
 	if cfg.PinDigests {
 		return true
 	}
 	for _, preset := range cfg.Extends {
-		if preset == "helpers:pinGitHubActionDigests" || preset == "helpers:pinGitHubActionDigestsToSemver" {
+		if renovateActionPinningPresets[preset] {
 			return true
 		}
 	}

@@ -427,15 +427,9 @@ func updateToolActionsCooldownSuccessFinding(ruleName, severity string, facts *S
 }
 
 func updateToolActionsPinningSuccessFinding(ruleName, severity string, facts *ScanFacts) *Finding {
-	ren := facts.Renovate
-	renOK := !ren.Missing && ren.Invalid == nil && ren.Config != nil
-	if !renOK || !renovateCoversActions(ren.Config) {
+	if actionsPinningState(facts.Dependabot, facts.Renovate) != actionsPinningConfigured {
 		return nil
 	}
-	if !renovatePinningConfigured(ren.Config) {
-		return nil
-	}
-
 	return successMessage(ruleName, severity, "Dependency update tool configuration", "pass", nil)
 }
 

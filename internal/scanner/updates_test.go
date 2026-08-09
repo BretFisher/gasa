@@ -453,19 +453,108 @@ func TestEvaluateUpdateToolActionsCooldown_RenovatePassesDespiteDependabotNoCool
 // Dependabot has no option to pin actions to commit SHAs, so this rule must
 // no-op when only Dependabot is configured — Dependabot alone can neither pass
 // nor fail it. The workflow-level action_pinning rule covers that case.
-func TestEvaluateUpdateToolActionsPinning_DependabotOnly_NoOp(t *testing.T) {
+// dependabotFactsWithEcosystem builds Dependabot facts covering one ecosystem.
+func dependabotFactsWithEcosystem(ecosystem string) DependabotFacts {
+	return DependabotFacts{
+		Path: ".github/dependabot.yml",
+		Config: &DependabotConfig{Version: 2, Updates: []DependabotUpdate{{
+			PackageEcosystem: ecosystem,
+			Directory:        "/",
+		}}},
+	}
+}
+
+// pinningSuccess reports whether the rule emitted a success finding, which is a
+// distinct outcome from "emitted no finding" — a rule can produce neither.
+func pinningSuccess(t *testing.T, facts *ScanFacts) bool {
+	t.Helper()
+	return updateToolActionsPinningSuccessFinding(ruleNameUpdateToolActionsPinning, SeverityMedium, facts) != nil
+}
+
+// A Dependabot github-actions entry is sufficient on its own: Dependabot
+// preserves the reference style already in the workflows, so it keeps SHAs
+// current on an already-pinned repo.
+func TestEvaluateUpdateToolActionsPinning_DependabotActionsEntryPasses(t *testing.T) {
+	facts := &ScanFacts{Dependabot: dependabotFactsWithEcosystem("github-actions")}
+
+	if findings := evaluateUpdateToolActionsPinningFacts(facts); len(findings) != 0 {
+		t.Fatalf("findings = %+v, want none", findings)
+	}
+	if !pinningSuccess(t, facts) {
+		t.Fatal("expected a success finding for a Dependabot github-actions entry")
+	}
+}
+
+// No tool covers github-actions, so there is nothing to keep pinned. The rule is
+// not applicable and must emit neither a finding nor a success —
+// update-tool-configuration reports the missing coverage instead.
+func TestEvaluateUpdateToolActionsPinning_NoActionsCoverageIsNotApplicable(t *testing.T) {
+	facts := &ScanFacts{Dependabot: dependabotFactsWithEcosystem("docker")}
+
+	if findings := evaluateUpdateToolActionsPinningFacts(facts); len(findings) != 0 {
+		t.Fatalf("findings = %+v, want none", findings)
+	}
+	if pinningSuccess(t, facts) {
+		t.Fatal("expected no success finding when no tool covers github-actions")
+	}
+}
+
+// Dependabot covers a non-actions ecosystem while Renovate covers actions
+// without pinning: nothing maintains SHA pins, so the rule fires.
+func TestEvaluateUpdateToolActionsPinning_DependabotNonActionsPlusUnpinnedRenovate(t *testing.T) {
 	facts := &ScanFacts{
-		Dependabot: DependabotFacts{
-			Path: ".github/dependabot.yml",
-			Config: &DependabotConfig{Version: 2, Updates: []DependabotUpdate{{
-				PackageEcosystem: "github-actions",
-				Directory:        "/",
-			}}},
+		Dependabot: dependabotFactsWithEcosystem("docker"),
+		Renovate: RenovateFacts{
+			Path:   ".github/renovate.json",
+			Config: &RenovateConfig{Extends: []string{"config:recommended"}},
 		},
 	}
+
 	findings := evaluateUpdateToolActionsPinningFacts(facts)
-	if len(findings) != 0 {
+	if len(findings) != 1 || findings[0].ID != "update-tool-actions-not-pinning" {
+		t.Fatalf("findings = %+v, want one not-pinning finding", findings)
+	}
+	if pinningSuccess(t, facts) {
+		t.Fatal("a firing rule must not also report success")
+	}
+}
+
+// Regression test for the false positive that motivated preset resolution.
+// config:best-practices extends helpers:pinGitHubActionDigests, so a repo using
+// Renovate's own recommended config IS pinning action digests. Matching only the
+// literal helper names reported every such repo as unpinned.
+func TestRenovatePinningConfigured_BestPracticesPresetImpliesPinning(t *testing.T) {
+	cfg := &RenovateConfig{Extends: []string{renovatePresetBestPractices}}
+	if !renovatePinningConfigured(cfg) {
+		t.Fatal("config:best-practices extends helpers:pinGitHubActionDigests and must count as pinning")
+	}
+
+	facts := &ScanFacts{Renovate: RenovateFacts{Path: ".github/renovate.json", Config: cfg}}
+	if findings := evaluateUpdateToolActionsPinningFacts(facts); len(findings) != 0 {
 		t.Fatalf("findings = %+v, want none", findings)
+	}
+	if !pinningSuccess(t, facts) {
+		t.Fatal("expected a success finding for config:best-practices")
+	}
+}
+
+// config:recommended is the base preset that config:best-practices builds on and
+// does NOT enable digest pinning. Guards against over-correcting the fix above
+// into matching any config: preset.
+func TestRenovatePinningConfigured_RecommendedPresetIsNotPinning(t *testing.T) {
+	if renovatePinningConfigured(&RenovateConfig{Extends: []string{"config:recommended"}}) {
+		t.Fatal("config:recommended does not enable digest pinning")
+	}
+}
+
+// Documented limitation: remote and custom presets cannot be resolved without
+// fetching them, and the scanner stays conservative rather than assuming they
+// pin. Asserted so the trade-off is a deliberate, visible choice.
+func TestRenovatePinningConfigured_UnresolvablePresetStaysConservative(t *testing.T) {
+	for _, preset := range []string{"github>myorg/renovate-config", "local>myorg/preset"} {
+		if renovatePinningConfigured(&RenovateConfig{Extends: []string{preset}}) {
+			t.Fatalf("preset %q cannot be resolved and must not count as pinning", preset)
+		}
 	}
 }
 
@@ -490,7 +579,7 @@ func TestEvaluateUpdateToolActionsPinning_RenovatePinPreset(t *testing.T) {
 	facts := &ScanFacts{
 		Renovate: RenovateFacts{
 			Path:   ".github/renovate.json",
-			Config: &RenovateConfig{Extends: []string{"config:best-practices", "helpers:pinGitHubActionDigests"}},
+			Config: &RenovateConfig{Extends: []string{renovatePresetBestPractices, "helpers:pinGitHubActionDigests"}},
 		},
 	}
 	findings := evaluateUpdateToolActionsPinningFacts(facts)

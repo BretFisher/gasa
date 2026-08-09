@@ -579,11 +579,17 @@ func TestScanRepoWithOptions_IncludeSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(result.Findings) != 9 {
-		t.Fatalf("len(findings) = %d, want 9\nfindings=%+v", len(result.Findings), result.Findings)
+	// This repository is clean for every rule, so every rule must report a
+	// success — not merely stay quiet. Asserting against the rule count rather
+	// than a hard-coded number makes a silently non-reporting rule a test
+	// failure: that is exactly how update-tool-actions-pinning went unnoticed
+	// while it emitted neither a finding nor a success for Dependabot-only repos.
+	wantSuccesses := len(availableRules())
+	if len(result.Findings) != wantSuccesses {
+		t.Fatalf("len(findings) = %d, want %d (one success per rule)\nfindings=%+v", len(result.Findings), wantSuccesses, result.Findings)
 	}
-	if result.CountSuccesses() != 9 {
-		t.Fatalf("success count = %d, want 9", result.CountSuccesses())
+	if result.CountSuccesses() != wantSuccesses {
+		t.Fatalf("success count = %d, want %d", result.CountSuccesses(), wantSuccesses)
 	}
 	for _, finding := range result.Findings {
 		if !finding.Success {
