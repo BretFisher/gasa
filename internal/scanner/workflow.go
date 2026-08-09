@@ -158,8 +158,19 @@ func parseAndAddWorkflowFile(ctx context.Context, file *github.RepositoryContent
 		if dbg != nil {
 			dbg(repoFull, "workflow parsed OK: "+*file.Path)
 		}
-	} else if dbg != nil {
-		dbg(repoFull, "workflow parse error "+*file.Path+": "+err.Error())
+	} else {
+		// Every workflow rule skips files it could not parse. Left unrecorded,
+		// a repository whose workflows all fail to parse produces zero findings
+		// and reads as a clean bill of health for files nobody actually checked.
+		// The parse error used to appear only under --debug.
+		//
+		// GitHub will not run a workflow it cannot parse either, so this is
+		// usually a broken file rather than a hidden risk — but "we could not
+		// look" must never render as "we looked and it was fine".
+		c.addWarning("workflow "+*file.Path, "could not be parsed as YAML: "+err.Error())
+		if dbg != nil {
+			dbg(repoFull, "workflow parse error "+*file.Path+": "+err.Error())
+		}
 	}
 
 	return fact, true
