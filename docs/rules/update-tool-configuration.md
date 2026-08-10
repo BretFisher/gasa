@@ -156,7 +156,7 @@ updates:
 }
 ```
 
-**Renovate (implicit — auto-detects all managers including github-actions):**
+**Renovate (implicit — auto-detects all managers including `github-actions`):**
 
 ```json
 {
