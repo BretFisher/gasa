@@ -4,4 +4,4 @@ enabled: true
 # Optionally enable automated migration pull requests (defaults to off).
 migrate:
   enabled: true
-  period: "168h"        # reconcile weekly; clamped to a 1-day minimum
+  period: "168h" # reconcile weekly; clamped to a 1-day minimum

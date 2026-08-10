@@ -1,12 +1,12 @@
 # GitHub Actions Security Assessment
 
-A CLI tool that scans GitHub repositories for Actions security-related misconfigurations. It checks your workflows, repo settings, and dependency tooling against recommended security practices and tells you exactly what to fix.
+A command-line tool that scans GitHub repositories for Actions security-related misconfigurations. It checks your workflows, repo settings, and dependency tooling against recommended security practices and tells you exactly what to fix.
 
-You can scan single repos or entire users and orgs. You can control which rules it runs and the type of output (table, json, or html). Rules have docs and remediation help.
+You can scan single repos or entire users and orgs. You can control which rules it runs and the type of output (`table`, `json`, or `html`). Rules have docs and remediation help.
 
-You can use it as a downloadable CLI, a Docker container, or a GitHub Action. It can do a partical check on a 3rd-party public repository, but for a full settings check it'll need at least read-only admin access, which if your local `gh` cli is logged in, it'll use that to check your repository settings.
+You can use it as a downloadable CLI, a Docker container, or a GitHub Action. It can do a partial check on a third-party public repository, but for a full settings check it'll need at least read-only admin access, which if your local `gh` cli is logged in, it'll use that to check your repository settings.
 
-This tool is only concerned with GitHub Actions security best practices, and goes beyond the workflow yaml to help repo owners, partically open source maintainers, validate that their workflows, settings, and Dependabot/Renovate configs are providing a safe Actions environment.
+This tool is only concerned with GitHub Actions security best practices, and goes beyond the workflow YAML to help repo owners, particularly open source maintainers, validate that their workflows, settings, and Dependabot/Renovate configs are providing a safe Actions environment.
 
 > [!WARNING]
 > Don't run `gasa` as a GitHub Actions workflow on a public repo — the findings report would be public, which is likely the last thing you want for a security report. A future feature will report findings to the GitHub Security tab to keep them private.
@@ -98,7 +98,7 @@ See [Build](#build) below for development commands.
 | `--output` | `batch` | Write the report to this file path (required for `--format html`; optional for `--format json`, which defaults to stdout) |
 | `--concurrency` | `batch` | Number of repos to scan in parallel (default `5`) |
 | `--include-archived` | `batch` | Include archived repos when scanning a whole user or org (skipped by default) |
-| `--input` | `batch` | Path to a file with one `owner/repo` per line (`#` comments and blank lines ignored) |
+| `--input` | `batch` | Path to a file with one `owner/repo` per line (`#` comments and empty lines ignored) |
 
 ### Authentication
 
@@ -188,7 +188,7 @@ Batch mode is the fastest way to assess many repositories at once and roll the r
 |-------|---------|----------|
 | User or org name | `gasa batch bretfisher` | Fetches all of that account's repos (auto-detects user vs org), most-recently-pushed first |
 | Explicit list | `gasa batch owner/repo1,owner/repo2` | Scans only the comma-separated repos |
-| File (`--input`) | `gasa batch --input repos.txt` | Reads one `owner/repo` per line; `#` comments and blank lines are ignored |
+| File (`--input`) | `gasa batch --input repos.txt` | Reads one `owner/repo` per line; `#` comments and empty lines are ignored |
 
 Output depends on `--format`:
 

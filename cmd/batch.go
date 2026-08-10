@@ -278,7 +278,7 @@ func printIncompleteSummary(results []batchRepoResult) {
 	if repos == 0 {
 		return
 	}
-	fmt.Fprintf(os.Stderr, "\n⚠ %d repositor%s had %d incomplete check(s); findings may be partial. Re-scan affected repos or raise --timeout.\n",
+	fmt.Fprintf(os.Stderr, "\n⚠ %d %s had %d incomplete check(s); findings may be partial. Re-scan affected repos or raise --timeout.\n",
 		repos, pluralRepos(repos), checks)
 }
 
@@ -295,11 +295,14 @@ func countIncomplete(results []batchRepoResult) (repos, checks int) {
 	return repos, checks
 }
 
+// pluralRepos returns the whole noun rather than a suffix. Splitting the word
+// across the format string ("repositor%s") left the literal "repositor" in the
+// source, which codespell reads as a misspelling of "repository".
 func pluralRepos(n int) string {
 	if n == 1 {
-		return "y"
+		return "repository"
 	}
-	return "ies"
+	return "repositories"
 }
 
 // runBatchScans executes scans concurrently and returns ordered results.
