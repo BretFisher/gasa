@@ -295,9 +295,10 @@ func countIncomplete(results []batchRepoResult) (repos, checks int) {
 	return repos, checks
 }
 
-// pluralRepos returns the whole noun rather than a suffix. Splitting the word
-// across the format string ("repositor%s") left the literal "repositor" in the
-// source, which codespell reads as a misspelling of "repository".
+// pluralRepos returns the whole noun rather than just its plural suffix.
+// Previously the caller emitted the stem inline and this returned only the
+// ending, which left a truncated word in the source that spell checkers
+// reasonably flagged as a typo.
 func pluralRepos(n int) string {
 	if n == 1 {
 		return "repository"
