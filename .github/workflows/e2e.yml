@@ -1,0 +1,75 @@
+---
+name: E2E
+
+# Scans the three real fixture repositories and asserts what gasa reports.
+# Kept separate from ci.yml because it has a different trust model, a different
+# credential, and a different failure meaning.
+#
+# Deliberately NOT triggered by pull_request. This job holds a cross-repository
+# PAT, and a pull request in a Go repository runs attacker-controlled code --
+# `go test` executes whatever the branch added. Any PR-triggered job holding a
+# PAT is an exfiltration path, and it does not take a fork to exploit. The
+# consequence is accepted: rule regressions are caught on main rather than in
+# the PR that introduces them, and `make test-e2e` is the cheap pre-merge check.
+on:
+  push:
+    branches: [main]
+    # Only paths that can change what a scan reports.
+    paths:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+      - docs/rules/**
+      - testdata/e2e/**
+      - .github/workflows/e2e.yml
+  # Catches GitHub changing its own API behaviour, which is a primary reason
+  # this suite exists and which no code change would otherwise reveal.
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Reset permissions to none at the workflow level; the job grants its own.
+permissions: {}
+
+jobs:
+  scan:
+    name: Scan Fixtures
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # The PAT is an environment secret, so only a job declaring this
+    # environment can reach it. That keeps it out of reach of every other
+    # workflow in this repository.
+    environment: e2e-fixtures
+
+    permissions:
+      # Only to clone this repository. GITHUB_TOKEN is not the credential doing
+      # the scanning; it cannot read the fixture repositories at all.
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+
+      # Runs before the assertions so drift is reported as drift, rather than
+      # surfacing later as a rule regression that is not one.
+      - name: Verify fixture repositories match the checkout
+        env:
+          GITHUB_TOKEN: ${{ secrets.E2E_REPO_PAT }}
+        run: make fixtures-verify
+
+      - name: Run end-to-end scans
+        env:
+          GITHUB_TOKEN: ${{ secrets.E2E_REPO_PAT }}
+        run: make test-e2e
