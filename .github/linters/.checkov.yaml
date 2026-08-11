@@ -11,3 +11,12 @@ skip-check:
   # only publishes the :latest tag. Versioned/pinned tags require a paid
   # subscription, so we cannot pin and must allow :latest here.
   - CKV_DOCKER_7
+
+# Paths excluded from scanning entirely.
+skip-path:
+  # testdata/e2e holds the end-to-end fixture repositories. Some of those files
+  # are deliberately insecure so gasa has something to detect -- the private
+  # fixture's Dockerfile has no USER and no HEALTHCHECK on purpose. Fixing them
+  # would destroy the fixture. Checkov still scans the real Dockerfiles at the
+  # repository root.
+  - testdata/.*
