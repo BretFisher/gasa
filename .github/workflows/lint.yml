@@ -37,6 +37,15 @@ jobs:
     uses: bretfisher/super-linter-workflow/.github/workflows/reusable-super-linter.yaml@main # zizmor: ignore[unpinned-uses]
     # Prefer .github/super-linter.env for enabling/disabling individual linters rather than extra-envs here.
 
+    with:
+      # testdata/e2e holds the end-to-end fixture repositories, and several of
+      # those files are deliberately insecure: unpinned actions, a
+      # pull_request_target workflow, a Dockerfile with no USER. They exist to be
+      # detected by gasa, so linting them reports real findings that must not be
+      # fixed -- fixing them destroys the fixture. The golden files and manifests
+      # alongside them are generated, so formatting them is equally pointless.
+      filter-regex-exclude: testdata/.*
+
     ### Optional settings examples
 
     # with:
