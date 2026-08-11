@@ -387,6 +387,9 @@ func forkPRApprovalSuccessFinding(ruleName, severity string, facts *ScanFacts) *
 		}
 		return successMessage(ruleName, severity, "Repository Actions settings", "pass-disabled", nil)
 	}
+	if facts.ActionsSettings.ForkPRApprovalNotApplicable {
+		return successMessage(ruleName, severity, "Repository Actions settings", "pass-not-applicable", nil)
+	}
 	policy := facts.ActionsSettings.ForkPRContributorApproval
 	if policy == nil || policy.ApprovalPolicy != forkPRApprovalAllExternal {
 		return nil
@@ -757,6 +760,11 @@ func evaluateForkPRContributorApprovalRule(facts *ScanFacts) []Finding {
 	findings := make([]Finding, 0)
 	findings = appendSettingsAccessFinding(findings, facts)
 
+	// Nothing to flag where the control does not exist.
+	if facts.ActionsSettings.ForkPRApprovalNotApplicable {
+		return findings
+	}
+
 	if undetermined := undeterminedFindingFor(facts, ruleNameForkPRContributorApproval, settingForkPRApproval); undetermined != nil {
 		return append(findings, *undetermined)
 	}
@@ -791,12 +799,28 @@ func evaluateUpdateToolActionsPinningRule(facts *ScanFacts) []Finding {
 }
 
 func applyRuleConfig(findings []Finding, r rule, cfg *Config) []Finding {
+	// Only a user's explicit severity override replaces what a finding chose for
+	// itself. Stamping the rule's default severity onto every finding discarded
+	// the deliberate `info` on the access and "could not determine" findings, so
+	// a check that merely could not be evaluated was reported at the full
+	// severity of the rule it belongs to — a coverage hole rendered as a
+	// high-severity vulnerability.
+	override := ""
+	if cfg != nil {
+		if s := normalizeSeverity(cfg.severityOverride(r.Name)); isValidSeverity(s) {
+			override = s
+		}
+	}
+
 	for i := range findings {
 		findings[i].Rule = r.Name
 		findings[i].Category = r.Category
 		findings[i].DocURL = r.DocURL()
-		if override := effectiveRuleSeverity(r, cfg); override != "" {
+		switch {
+		case override != "":
 			findings[i].Severity = override
+		case findings[i].Severity == "":
+			findings[i].Severity = r.Severity
 		}
 	}
 	return findings

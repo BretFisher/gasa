@@ -23,6 +23,11 @@ messages:
     description: >-
       GitHub Actions are disabled for this repository, so fork pull request
       workflows cannot run.
+  pass-not-applicable:
+    title: Fork pull request workflow approval does not apply to this repository
+    description: >-
+      GitHub does not offer this setting for private repositories, so there is no
+      fork pull request approval policy to weaken.
   pass-all-external:
     title: Fork pull request workflows require full external approval
     description: >-

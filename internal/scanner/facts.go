@@ -46,6 +46,17 @@ type ActionsSettingsFacts struct {
 	DefaultWorkflowPermissions *github.DefaultWorkflowPermissionRepository
 	ForkPRContributorApproval  *github.ContributorApprovalPermissions
 
+	// ForkPRApprovalNotApplicable is set when GitHub reports that fork-PR
+	// approval does not exist for this repository at all. Private repositories
+	// answer the endpoint with 422 "Fork PR approval is not allowed for private
+	// repositories".
+	//
+	// This is deliberately distinct from Undetermined: the setting was not
+	// unreadable, it has no meaning here. Reporting it as unreadable produced a
+	// finding and an incomplete-scan warning on every private repository scan,
+	// for a control that cannot be misconfigured because it does not exist.
+	ForkPRApprovalNotApplicable bool
+
 	// Undetermined records settings the scanner tried to read but could not,
 	// keyed by the constants below and holding a human-readable cause.
 	//

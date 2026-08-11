@@ -483,3 +483,67 @@ func collectAndEvaluateActionsSettings(t *testing.T, s *Scanner) []Finding {
 	findings = append(findings, evaluateForkPRContributorApprovalRule(facts)...)
 	return dedupeFindings(findings)
 }
+
+// GitHub answers the fork-PR approval endpoint with 422 on private repositories
+// ("Fork PR approval is not allowed for private repositories"). That is a
+// determinate answer about the repository, not a failed read, so it must not
+// produce an undetermined finding or an incomplete-scan warning — doing so
+// reported a control that cannot exist as unverified on every private scan.
+func TestForkPRApproval_UnsupportedOnPrivateRepoIsNotApplicable(t *testing.T) {
+	s, mux := newTestScanner(t, true)
+	handleJSON(mux, "/repos/owner/repo/actions/permissions", map[string]any{"enabled": true, "allowed_actions": "selected"})
+	handleJSON(mux, "/repos/owner/repo/actions/permissions/workflow", map[string]any{"default_workflow_permissions": "read", "can_approve_pull_request_reviews": false})
+	mux.HandleFunc("/repos/owner/repo/actions/permissions/fork-pr-contributor-approval", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		if _, err := w.Write([]byte(`{"message":"Fork PR approval is not allowed for private repositories."}`)); err != nil {
+			t.Errorf("failed to write response: %v", err)
+		}
+	})
+
+	collector := newTestFactCollector(s)
+	facts := &ScanFacts{ActionsSettings: collector.collectActionsSettingsFacts(context.Background(), "owner", "repo", nil)}
+
+	if !facts.ActionsSettings.ForkPRApprovalNotApplicable {
+		t.Fatal("expected the 422 to be recorded as not applicable")
+	}
+	if len(collector.warnings) != 0 {
+		t.Fatalf("a setting that does not exist must not mark the scan incomplete, got %+v", collector.warnings)
+	}
+	if findings := evaluateForkPRContributorApprovalRule(facts); len(findings) != 0 {
+		t.Fatalf("findings = %+v, want none", findings)
+	}
+
+	success := forkPRApprovalSuccessFinding(ruleNameForkPRContributorApproval, SeverityHigh, facts)
+	if success == nil {
+		t.Fatal("expected a success finding explaining the setting does not apply")
+	}
+	if !strings.Contains(success.Title, "does not apply") {
+		t.Fatalf("success title = %q, want it to say the setting does not apply", success.Title)
+	}
+}
+
+// A finding that deliberately sets its own severity must keep it. Stamping the
+// rule's severity over every finding reported "could not determine" — a gap in
+// coverage — at the full severity of the rule, inflating the counts operators
+// trust.
+func TestApplyRuleConfig_PreservesDeliberateFindingSeverity(t *testing.T) {
+	r := rule{RuleInfo: RuleInfo{Name: ruleNameForkPRContributorApproval, Severity: SeverityHigh, Category: categorySettings}}
+
+	got := applyRuleConfig([]Finding{{ID: "undetermined-x", Severity: SeverityInfo}}, r, nil)
+	if got[0].Severity != SeverityInfo {
+		t.Fatalf("severity = %q, want info to survive", got[0].Severity)
+	}
+
+	// A finding that sets nothing still inherits the rule's severity.
+	got = applyRuleConfig([]Finding{{ID: "plain"}}, r, nil)
+	if got[0].Severity != SeverityHigh {
+		t.Fatalf("severity = %q, want the rule default when the finding sets none", got[0].Severity)
+	}
+
+	// An explicit user override still wins.
+	cfg := &Config{Overrides: []RuleOverride{{Rule: ruleNameForkPRContributorApproval, Severity: "low"}}}
+	got = applyRuleConfig([]Finding{{ID: "undetermined-x", Severity: SeverityInfo}}, r, cfg)
+	if got[0].Severity != SeverityLow {
+		t.Fatalf("severity = %q, want the config override to win", got[0].Severity)
+	}
+}

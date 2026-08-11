@@ -28,6 +28,18 @@ func isAccessDenied(resp *github.Response) bool {
 	}
 }
 
+// isForkPRApprovalUnsupported reports whether GitHub answered the fork-PR
+// contributor approval endpoint with "this setting does not apply here".
+//
+// Private repositories return 422 with "Fork PR approval is not allowed for
+// private repositories". That is a determinate answer about the repository, not
+// a failure to read it, so it must not be treated as an access denial or a
+// transient error — both of those would report a control that cannot exist as
+// unverified.
+func isForkPRApprovalUnsupported(resp *github.Response) bool {
+	return resp != nil && resp.Response != nil && resp.StatusCode == http.StatusUnprocessableEntity
+}
+
 func (c *factCollector) collectActionsSettingsFacts(ctx context.Context, owner, repo string, dbg DebugLogger) ActionsSettingsFacts {
 	facts := ActionsSettingsFacts{}
 	repoFull := owner + "/" + repo
@@ -180,6 +192,11 @@ func fetchAuthenticatedActionsSettings(ctx context.Context, c *factCollector, ow
 		facts.ForkPRContributorApproval = policy
 		if dbg != nil {
 			dbg(repoFull, "fork-pr-approval: policy="+policy.ApprovalPolicy)
+		}
+	case isForkPRApprovalUnsupported(resp):
+		facts.ForkPRApprovalNotApplicable = true
+		if dbg != nil {
+			dbg(repoFull, "fork-pr-approval: not applicable to this repository (HTTP 422)")
 		}
 	case isAccessDenied(resp):
 		facts.markUndetermined(settingForkPRApproval, fmt.Sprintf("GitHub returned %d — the token cannot read this setting", resp.StatusCode))
