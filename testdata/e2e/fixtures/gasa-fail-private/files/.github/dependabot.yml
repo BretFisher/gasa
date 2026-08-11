@@ -1,0 +1,11 @@
+# Deliberately covers docker only. Adding a github-actions entry here would make
+# updates/update-tool-actions-pinning pass, which is the failure this fixture
+# exists to produce.
+version: 2
+updates:
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "[docker] "

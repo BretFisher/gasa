@@ -1,0 +1,38 @@
+# NOTE, this is an EXAMPLE of a bad workflow that exposes secrets to forks
+# The example is mostly safe because I've locked down PRs to only ppl with write access and
+#   set Actions to require manual approval for all external contributions
+# GitHub as also hardened things like pull_request_target and actions/checkout in 2026
+
+name: PR Build & Comment
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+# WARNING: This workflow should have manually set permissions, but it doesn't
+
+jobs:
+  build-and-comment:
+    runs-on: ubuntu-latest
+    steps:
+      # ⚠️ Checks out the UNTRUSTED code from the fork...
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # ⚠️ ...then executes it, while secrets are in scope
+      - name: Install & build
+        run: npm ci && npm run build
+
+      - name: Comment result
+        uses: actions/github-script@v7
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.payload.pull_request.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: 'Build complete ✅'
+            })

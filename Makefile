@@ -1,4 +1,4 @@
-.PHONY: run build clean test cover deps fmt vet lint
+.PHONY: run build clean test cover deps fmt vet lint fixtures-verify fixtures-apply fixtures-capture
 
 # Run the CLI
 run:
@@ -40,3 +40,25 @@ vet:
 # Lint via golangci-lint (install: brew install golangci-lint)
 lint:
 	golangci-lint run -c .github/linters/.golangci.yaml ./...
+
+# --- End-to-end test fixture repositories -----------------------------------
+# The e2e suite scans three real repositories (gasa-pass, gasa-fail,
+# gasa-fail-private). They are inputs to a test, so drift makes the test lie
+# while still going green. Their content and settings are declared under
+# testdata/e2e/fixtures/ and reconciled with these targets.
+
+# Read-only drift check: does the live state match the checkout? This is the
+# only fixture target CI runs, and the only one its read-only token can perform.
+fixtures-verify:
+	go run ./tools/fixtures verify
+
+# Push the checkout back over the repositories. Needs an admin token, so it is
+# local-only. Additive: it never deletes repository files.
+fixtures-apply:
+	go run ./tools/fixtures apply
+
+# Record the repositories' current state into the checkout. Use after a
+# deliberate change made through the GitHub UI; review the diff before
+# committing.
+fixtures-capture:
+	go run ./tools/fixtures capture

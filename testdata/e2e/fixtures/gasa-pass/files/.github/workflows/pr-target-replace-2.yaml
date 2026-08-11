@@ -1,0 +1,40 @@
+name: PR Comment
+
+on:
+  workflow_run:
+    workflows: ["PR Build"]
+    types: [completed]
+
+permissions:
+  pull-requests: write   # only the scope this job actually needs
+
+jobs:
+  comment:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    steps:
+      # Download the artifact from the triggering run. NOTE: no checkout of
+      # PR code anywhere in this job — that's the whole point.
+      - name: Download PR metadata
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: pr-meta
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read PR number
+        id: pr
+        run: echo "number=$(cat number)" >> "$GITHUB_OUTPUT"
+
+      - name: Comment result
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}   # now safe to have in scope
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: ${{ steps.pr.outputs.number }},
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: 'Build complete ✅'
+            })

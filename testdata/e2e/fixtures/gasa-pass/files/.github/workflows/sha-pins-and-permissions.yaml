@@ -1,0 +1,40 @@
+# Demo workflow for a zizmor hash-pinning walkthrough.
+# Every `uses:` below is pinned to a mutable tag (@v4, @v5...) on purpose.
+# Run `zizmor .` to see the unpinned-uses findings, then `zizmor --fix .`
+# (with a GITHUB_TOKEN set) to rewrite each tag to its commit SHA.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions: {}   # keeps the demo output focused on pinning, not permissions
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+
+      - name: Install & test
+        run: npm ci && npm test
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
+
+      - name: Save build artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: build
+          path: dist/
