@@ -1333,7 +1333,32 @@ Both were discovered only by pointing the scanner at a real private repository, 
   predates the audit and affected the existing `settings-check-failed` and
   `settings-check-unavailable` findings too
 
-**Phase D — harness.** Capture fixtures, build `fixtures-verify` / `fixtures-apply`, generate goldens, add the coverage-matrix test, add `.github/workflows/e2e.yml`.
+**Phase D — harness. Complete 2026-08-11**, in three pull requests: fixture tooling, the test suite, and
+the workflow.
+
+- `tools/fixtures` declares each fixture repository's content and Actions settings under
+  `testdata/e2e/fixtures/`, with `verify` (read-only, the only mode CI runs), `apply` (additive, never
+  deletes) and `capture` modes, wired to `make fixtures-verify` / `fixtures-apply` / `fixtures-capture`
+- `test/e2e` scans all three repositories behind an `e2e` build tag, asserting the scanner API against
+  golden files and separately driving the real binary for the CLI wiring the API path skips
+- `TestEveryRuleHasPassAndFailCoverage` enforces that every registered rule passes in `gasa-pass` and
+  fails in at least one fail fixture, so adding a rule without fixtures becomes a build failure
+- `.github/workflows/e2e.yml` runs on pushes to `main` (path-filtered), a daily schedule, and manual
+  dispatch — never on `pull_request`, since the job holds a cross-repository PAT and a PR runs
+  attacker-controlled code. Linted clean with actionlint, zizmor and poutine
+
+Two further defects were found while building it, both fixed in the same pull requests:
+
+- **P3 — the cooldown and pinning rules went silent when no update tool covered `github-actions`.**
+  Neither a finding nor a success, so the check vanished from the report — indistinguishable from a
+  clean pass. True of `gasa-fail` for both rules. They now report not-applicable explicitly, matching
+  the treatment private-repo fork-PR approval received in P1. All three fixtures now report all ten
+  rules
+- **P4 — the first version of the e2e suite passed while comparing empty results against empty
+  goldens.** The rule registry is built from `docs/rules` front matter and populated by the binary at
+  startup, so a package importing the scanner directly registers no rules and every scan returns
+  nothing. `TestMain` now refuses to run on an empty registry, and a scan reporting fewer findings
+  than there are registered rules is a hard failure
 
 **Phase E — deferred.** R17 (nine Renovate 404 probes per scan) is an efficiency item that blocks nothing. The three new-rule candidates surfaced by this audit (R6, R8, R16) have moved to Phase 13.
 
