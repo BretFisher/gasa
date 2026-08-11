@@ -39,7 +39,7 @@ vet:
 
 # Lint via golangci-lint (install: brew install golangci-lint)
 lint:
-	golangci-lint run -c .github/linters/.golangci.yaml ./...
+	golangci-lint run -c .github/linters/.golangci.yml ./...
 
 # Run the end-to-end suite against the real fixture repositories. Behind a build
 # tag so `make test` cannot reach the network even by accident. Needs a token
