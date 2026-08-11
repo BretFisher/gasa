@@ -1293,12 +1293,45 @@ Phase C cannot begin until this stack is merged: PRs #34 and #39 change rule out
 
 7. R20's "Bad example" in `update-tool-actions-pinning.md` (teaches a config that is actually correct), R4 (rule 2 describes only the fallback path), R11 (rule 4 contradicts the code), R5 (stale "Check ID" row, sweep all 10 pages)
 
-**Phase C — fixtures.** After the code is frozen.
+**Phase C — fixtures. In progress.**
 
-8. **R15** — set `can_approve_pull_request_reviews: true` on `gasa-fail`; last settings rule it does not fail
-9. **R18 + R21** — create `gasa-fail-private` with the R22-revised config shape, **re-scope `E2E_REPO_PAT` to include it**, and probe all four settings endpoints on a private repo before writing its manifest
+8. ~~**R15** — set `can_approve_pull_request_reviews: true` on `gasa-fail`~~ **Done 2026-08-11.** `gasa-fail` now fails 8 of 10 rules, which is every rule it structurally can; only rules 9 and 10 remain, and those are what `gasa-fail-private` exists for
+9. ~~**R18 + R21** — create `gasa-fail-private`~~ **Done 2026-08-11.** Private repo created with
+   Dependabot scoped to `docker` only (plus a real `Dockerfile` so that ecosystem is valid), Renovate
+   `{"extends": ["config:recommended"]}`, one deliberately correct SHA-pinned workflow, and hardened
+   Actions settings. Verified live: 10 of 10 rules report, and exactly rules 9 and 10 fail. Two code
+   defects were found in the process — see P1 and P2 below. **Still outstanding: re-scope
+   `E2E_REPO_PAT` to include this repository** (see below)
 10. Optional: good Renovate config on `gasa-pass`, which doubles as the live regression test for R20
-11. Hygiene: make fixture workflow `run:` steps inert; decide the Dependabot-churn question (R2, R14)
+11. Hygiene: make fixture workflow `run:` steps inert (`gasa-fail` only; the new fixture already is)
+
+Decided 2026-08-11: **Dependabot is not suppressed on the fixture repositories.** Churn is accepted and `fixtures-apply` reverts it, which needs no extra setup and self-heals. This closes R2 and R14.
+
+**Blocking Phase D — `E2E_REPO_PAT` must be re-scoped.** The token currently grants access to
+`gasa-pass` and `gasa-fail` only. Add `gasa-fail-private`, keeping `Contents: Read` and
+`Administration: Read`. On a private repository `Contents: Read` is load-bearing rather than a
+formality. Without it the e2e job fails with a 404 that reads like a missing repository rather than
+a permissions problem. This is a manual step in the GitHub UI; fine-grained PAT scopes are not
+editable through the API.
+
+#### Defects found while building the private fixture
+
+Both were discovered only by pointing the scanner at a real private repository, which is precisely the class of bug mocked tests cannot reach.
+
+- **P1 — FIX-CODE: fork-PR approval reported as unverified on every private repository.** `GET
+  /actions/permissions/fork-pr-contributor-approval` answers **422** on private repos with "Fork PR
+  approval is not allowed for private repositories". 422 is neither an access denial nor a transient
+  failure, so it fell to the catch-all branch and produced both an undetermined finding and an
+  incomplete-scan warning — flagging a control that cannot be misconfigured because it does not exist
+  there. Now recognised as a distinct not-applicable state that passes with its own message and raises
+  no warning
+- **P2 — FIX-CODE: `applyRuleConfig` discarded every finding's own severity.** It stamped the rule's
+  severity onto all findings unconditionally, so the deliberate `info` on the access and "could not
+  determine" findings was overwritten with the rule's — a gap in coverage rendered as a high-severity
+  vulnerability, inflating the counts operators triage on. Now only an explicit user override replaces
+  a finding's chosen severity; a finding that sets none still inherits the rule default. This bug
+  predates the audit and affected the existing `settings-check-failed` and
+  `settings-check-unavailable` findings too
 
 **Phase D — harness.** Capture fixtures, build `fixtures-verify` / `fixtures-apply`, generate goldens, add the coverage-matrix test, add `.github/workflows/e2e.yml`.
 
@@ -1306,17 +1339,12 @@ Phase C cannot begin until this stack is merged: PRs #34 and #39 change rule out
 
 ### Open decisions
 
-- should the e2e job also assert exit codes and human table output, or only the scanner API? In other
-  words: call the scanner's Go API directly and check the findings it returns, or run the real `gasa`
-  binary and check what a user sees. API-only gives clearer failures; running the binary also covers
-  CLI wiring (flag parsing, token resolution) that the API path skips. Recommendation: both, weighted
-  — the API for the 10-rule matrix, plus one small test that runs the binary end to end
-- whether to suppress Dependabot on the fixture repos or let `fixtures-apply` revert its churn.
-  `gasa-pass` currently has five open Dependabot PRs proposing action bumps; if one merges, the repo
-  no longer matches the checked-in fixture and the drift check fires. Either set
-  `open-pull-requests-limit: 0` there to freeze it, or leave it and let `fixtures-apply` push the
-  intended state back. The second needs no setup and self-heals; the first means fewer surprise
-  failures
+- ~~should the e2e job assert the scanner API or the CLI binary?~~ **Resolved 2026-08-11: both.** The
+  scanner API carries the 10-rule coverage matrix because its failures point straight at scanner
+  behavior, and a smaller set of assertions drives the real `gasa` binary to cover the CLI wiring the
+  API path skips — flag parsing, `--no-config`, token resolution, output format, and exit code
+- ~~whether to suppress Dependabot on the fixture repos~~ **Resolved 2026-08-11: not suppressed.**
+  Churn is accepted and `fixtures-apply` reverts it, which needs no extra setup and self-heals
 - R6, R8, R16 have moved to Phase 13 and are decided there, not here
 
 Result needed:
