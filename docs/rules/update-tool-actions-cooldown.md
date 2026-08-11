@@ -22,6 +22,11 @@ messages:
 
       Renovate (renovate.json / .github/renovate.json) — add globally or in a packageRule:
         { "minimumReleaseAge": "7 days" }
+  pass-not-applicable:
+    title: No GitHub Actions updates to apply a cooldown to
+    description: >-
+      No configured update tool covers the github-actions ecosystem, so there
+      are no action updates for a cooldown to delay.
   pass:
     title: GitHub Actions update cooldown is configured
     description: >-

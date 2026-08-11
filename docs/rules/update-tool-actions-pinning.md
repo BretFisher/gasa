@@ -28,6 +28,11 @@ messages:
       Or add a github-actions entry to .github/dependabot.yml — Dependabot
       preserves whatever reference style your workflows already use, so it keeps
       SHAs current on an already-pinned repository.
+  pass-not-applicable:
+    title: No GitHub Action SHAs for an update tool to maintain
+    description: >-
+      No configured update tool covers the github-actions ecosystem, so there
+      are no action references for one to keep pinned.
   pass:
     title: Update tool will keep GitHub Action commit SHAs current
     description: >-

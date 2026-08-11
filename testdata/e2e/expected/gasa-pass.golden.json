@@ -1,0 +1,66 @@
+{
+  "repo": "gasa-pass",
+  "incomplete": [],
+  "findings": [
+    {
+      "rule": "actions/permissions/allowed-actions-policy",
+      "id": "success-actions-permissions-allowed-actions-policy",
+      "severity": "medium",
+      "success": true
+    },
+    {
+      "rule": "actions/permissions/fork-pr-contributor-approval",
+      "id": "success-actions-permissions-fork-pr-contributor-approval",
+      "severity": "high",
+      "success": true
+    },
+    {
+      "rule": "actions/permissions/workflow/actions-can-approve-prs",
+      "id": "success-actions-permissions-workflow-actions-can-approve-prs",
+      "severity": "medium",
+      "success": true
+    },
+    {
+      "rule": "actions/permissions/workflow/default-workflow-permissions",
+      "id": "success-actions-permissions-workflow-default-workflow-permissions",
+      "severity": "high",
+      "success": true
+    },
+    {
+      "rule": "updates/update-tool-actions-cooldown",
+      "id": "success-updates-update-tool-actions-cooldown",
+      "severity": "low",
+      "success": true
+    },
+    {
+      "rule": "updates/update-tool-actions-pinning",
+      "id": "success-updates-update-tool-actions-pinning",
+      "severity": "medium",
+      "success": true
+    },
+    {
+      "rule": "updates/update-tool-configuration",
+      "id": "success-updates-update-tool-configuration",
+      "severity": "medium",
+      "success": true
+    },
+    {
+      "rule": "workflows/action-version-pinning",
+      "id": "success-workflows-action-version-pinning",
+      "severity": "high",
+      "success": true
+    },
+    {
+      "rule": "workflows/pull-request-target",
+      "id": "success-workflows-pull-request-target",
+      "severity": "critical",
+      "success": true
+    },
+    {
+      "rule": "workflows/workflow-permissions",
+      "id": "success-workflows-workflow-permissions",
+      "severity": "high",
+      "success": true
+    }
+  ]
+}

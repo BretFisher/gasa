@@ -435,25 +435,39 @@ func updateToolActionsCooldownSuccessFinding(ruleName, severity string, facts *S
 	depOK := !dep.Missing && dep.Invalid == nil && dep.Config != nil
 	renOK := !ren.Missing && ren.Invalid == nil && ren.Config != nil
 
+	// No update tool at all: there is no cooldown to set. update-tool-configuration
+	// reports the absence; this rule says so rather than going quiet.
 	if !depOK && !renOK {
-		return nil
+		return successMessage(ruleName, severity, "Dependency update tool configuration", "pass-not-applicable", nil)
 	}
 
-	depHasCooldown := depOK && dependabotActionsCooldownConfigured(dep.Config)
-	renHasCooldown := renOK && renovateCooldownConfigured(ren.Config)
-
-	if !depHasCooldown && !renHasCooldown {
-		return nil
+	if depOK && dependabotActionsCooldownConfigured(dep.Config) ||
+		renOK && renovateCooldownConfigured(ren.Config) {
+		return successMessage(ruleName, severity, "Dependency update tool configuration", "pass", nil)
 	}
 
-	return successMessage(ruleName, severity, "Dependency update tool configuration", "pass", nil)
+	// Reaching here with no cooldown means the rule already emitted its finding,
+	// unless nothing covers github-actions — in which case a cooldown for action
+	// updates is moot and the rule must still report that, not vanish.
+	coversActions := depOK && dependabotCoversActions(dep.Config) ||
+		renOK && renovateCoversActions(ren.Config)
+	if !coversActions {
+		return successMessage(ruleName, severity, "Dependency update tool configuration", "pass-not-applicable", nil)
+	}
+	return nil
 }
 
 func updateToolActionsPinningSuccessFinding(ruleName, severity string, facts *ScanFacts) *Finding {
-	if actionsPinningState(facts.Dependabot, facts.Renovate) != actionsPinningConfigured {
+	switch actionsPinningState(facts.Dependabot, facts.Renovate) {
+	case actionsPinningConfigured:
+		return successMessage(ruleName, severity, "Dependency update tool configuration", "pass", nil)
+	case actionsPinningNotApplicable:
+		// Nothing covers github-actions, so there are no action SHAs for an
+		// update tool to keep current. Say so rather than reporting nothing.
+		return successMessage(ruleName, severity, "Dependency update tool configuration", "pass-not-applicable", nil)
+	default:
 		return nil
 	}
-	return successMessage(ruleName, severity, "Dependency update tool configuration", "pass", nil)
 }
 
 func ruleCategory(ruleName string) string {
