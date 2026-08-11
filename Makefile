@@ -1,4 +1,4 @@
-.PHONY: run build clean test cover deps fmt vet lint fixtures-verify fixtures-apply fixtures-capture
+.PHONY: run build clean test test-e2e e2e-update cover deps fmt vet lint fixtures-verify fixtures-apply fixtures-capture
 
 # Run the CLI
 run:
@@ -39,7 +39,19 @@ vet:
 
 # Lint via golangci-lint (install: brew install golangci-lint)
 lint:
-	golangci-lint run -c .github/linters/.golangci.yaml ./...
+	golangci-lint run -c .github/linters/.golangci.yml ./...
+
+# Run the end-to-end suite against the real fixture repositories. Behind a build
+# tag so `make test` cannot reach the network even by accident. Needs a token
+# with Contents: Read and Administration: Read on all three fixture repos.
+test-e2e:
+	go test -tags=e2e -count=1 -timeout=10m ./test/e2e/...
+
+# Regenerate the golden files from the current scan results. Deliberately
+# separate from test-e2e: goldens must never update as a side effect of running
+# the suite, or a regression would quietly rewrite its own expectations.
+e2e-update:
+	go test -tags=e2e -count=1 -timeout=10m ./test/e2e/... -run TestScanMatchesGolden -update
 
 # --- End-to-end test fixture repositories -----------------------------------
 # The e2e suite scans three real repositories (gasa-pass, gasa-fail,

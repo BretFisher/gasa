@@ -485,17 +485,36 @@ func TestEvaluateUpdateToolActionsPinning_DependabotActionsEntryPasses(t *testin
 	}
 }
 
-// No tool covers github-actions, so there is nothing to keep pinned. The rule is
-// not applicable and must emit neither a finding nor a success —
-// update-tool-configuration reports the missing coverage instead.
-func TestEvaluateUpdateToolActionsPinning_NoActionsCoverageIsNotApplicable(t *testing.T) {
+// No tool covers github-actions, so there is nothing to keep pinned. The rule
+// must still report that explicitly: emitting nothing at all would make the
+// check vanish from the report, which in every output format is
+// indistinguishable from a clean pass.
+func TestEvaluateUpdateToolActionsPinning_NoActionsCoverageReportsNotApplicable(t *testing.T) {
 	facts := &ScanFacts{Dependabot: dependabotFactsWithEcosystem("docker")}
 
 	if findings := evaluateUpdateToolActionsPinningFacts(facts); len(findings) != 0 {
 		t.Fatalf("findings = %+v, want none", findings)
 	}
-	if pinningSuccess(t, facts) {
-		t.Fatal("expected no success finding when no tool covers github-actions")
+	success := updateToolActionsPinningSuccessFinding(ruleNameUpdateToolActionsPinning, SeverityMedium, facts)
+	if success == nil {
+		t.Fatal("expected a not-applicable success finding; a silent rule reads as a clean pass")
+	}
+	if !strings.Contains(success.Title, "No GitHub Action SHAs") {
+		t.Fatalf("success title = %q, want the not-applicable message", success.Title)
+	}
+}
+
+// Same contract for the cooldown rule: no actions coverage means no action
+// updates to delay, and the rule says so rather than going quiet.
+func TestEvaluateUpdateToolActionsCooldown_NoActionsCoverageReportsNotApplicable(t *testing.T) {
+	facts := &ScanFacts{Dependabot: dependabotFactsWithEcosystem("docker")}
+
+	if findings := evaluateUpdateToolActionsCooldownFacts(facts); len(findings) != 0 {
+		t.Fatalf("findings = %+v, want none", findings)
+	}
+	success := updateToolActionsCooldownSuccessFinding(ruleNameUpdateToolActionsCooldown, SeverityLow, facts)
+	if success == nil {
+		t.Fatal("expected a not-applicable success finding; a silent rule reads as a clean pass")
 	}
 }
 
