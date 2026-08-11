@@ -142,9 +142,9 @@ func TestCLIRejectsConflictingConfigFlags(t *testing.T) {
 }
 
 func truncate(s string) string {
-	const max = 2000
-	if len(s) <= max {
+	const limit = 2000
+	if len(s) <= limit {
 		return s
 	}
-	return s[:max] + "\n… truncated"
+	return s[:limit] + "\n… truncated"
 }

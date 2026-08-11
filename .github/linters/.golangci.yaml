@@ -1,5 +1,11 @@
 # Ref https://github.com/golangci/golangci-lint/blob/master/.golangci.reference.yml
 version: "2"
+run:
+  # test/e2e contains only files behind the `e2e` build tag, so without it that
+  # package has no Go files and golangci-lint fails typechecking outright.
+  # Setting the tag lints the end-to-end suite rather than skipping it.
+  build-tags:
+    - e2e
 linters:
   enable:
     - goconst
