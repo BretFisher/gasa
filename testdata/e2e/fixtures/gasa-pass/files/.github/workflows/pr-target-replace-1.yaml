@@ -1,0 +1,32 @@
+name: PR Build
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions: {}   # read-only, no secrets exposed to fork code
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # Safe: pull_request runs in the FORK's context — no base secrets,
+      # GITHUB_TOKEN is read-only. Running PR code here can't leak anything.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Install & build
+        run: npm ci && npm run build
+
+      # Hand the privileged workflow only the DATA it needs — not code.
+      - name: Save PR metadata
+        run: |
+          mkdir -p ./pr
+          echo "${{ github.event.pull_request.number }}" > ./pr/number
+          echo "success" > ./pr/result
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pr-meta
+          path: pr/

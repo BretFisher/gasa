@@ -1,0 +1,11 @@
+# Declarative description of a gasa end-to-end test fixture repository.
+# Managed by `make fixtures-apply`; do not edit the repository directly.
+repo: bretfisher/gasa-fail-private
+private: true
+actions:
+    enabled: true
+    allowed_actions: selected
+    default_workflow_permissions: read
+    can_approve_pull_request_reviews: false
+    fork_pr_contributor_approval: n/a
+purpose: Second known-bad repository, required because update-tool-configuration and update-tool-actions-cooldown have complementary trigger conditions and cannot both fail in one repository. Also the fixture for private-repo Actions settings behaviour, which differs from public.

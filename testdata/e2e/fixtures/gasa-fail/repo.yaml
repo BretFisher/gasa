@@ -1,0 +1,11 @@
+# Declarative description of a gasa end-to-end test fixture repository.
+# Managed by `make fixtures-apply`; do not edit the repository directly.
+repo: bretfisher/gasa-fail
+private: false
+actions:
+    enabled: true
+    allowed_actions: all
+    default_workflow_permissions: write
+    can_approve_pull_request_reviews: true
+    fork_pr_contributor_approval: first_time_contributors
+purpose: Primary known-bad repository. Fails every rule it structurally can, which is all of them except the two updates rules that require a tool covering github-actions (see gasa-fail-private).

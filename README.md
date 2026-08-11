@@ -399,3 +399,36 @@ make lint   # golangci-lint
 make fmt
 make deps
 ```
+
+### End-to-end test fixtures
+
+Alongside the unit suite, `gasa` is tested against three real GitHub repositories, because
+mocked API responses cannot catch GitHub changing its own behaviour:
+
+| Repository | Role |
+|---|---|
+| [`gasa-pass`](https://github.com/bretfisher/gasa-pass) | Known-good. Every rule passes, so it doubles as a reference to copy from |
+| [`gasa-fail`](https://github.com/bretfisher/gasa-fail) | Known-bad. Fails every rule it structurally can |
+| `gasa-fail-private` | Private. Covers the two update-tool rules that cannot fail in `gasa-fail`, and private-repo settings behaviour |
+
+Those repositories are **inputs to a test**, so if they drift the test lies while still passing.
+Their content and Actions settings are declared under `testdata/e2e/fixtures/` and reconciled
+with:
+
+```bash
+make fixtures-verify   # read-only: does the live state match the checkout?
+make fixtures-apply    # push the checkout back over the repositories (admin token)
+make fixtures-capture  # record live state into the checkout, then review the diff
+```
+
+`fixtures-verify` is the only one that runs in CI, and the only one its read-only token can
+perform. `fixtures-apply` is additive — it never deletes repository files.
+
+A fixture may declare `unmanaged` paths it deliberately does not own, which `apply` leaves
+alone and `verify` ignores. `gasa-pass` uses this for a workflow compiled by other tooling,
+so an upstream regeneration is not reported as fixture drift.
+
+Two rules cannot both fail in the same repository, which is why there are two "fail" fixtures:
+`update-tool-configuration` fires only when **no** tool covers the `github-actions` ecosystem,
+while `update-tool-actions-cooldown` fires only when a tool **does** cover it without a
+cooldown. Those conditions are exact complements.
