@@ -61,6 +61,12 @@
       "id": "success-workflows-workflow-permissions",
       "severity": "high",
       "success": true
+    },
+    {
+      "rule": "workflows/write-all-permissions",
+      "id": "success-workflows-write-all-permissions",
+      "severity": "high",
+      "success": true
     }
   ]
 }

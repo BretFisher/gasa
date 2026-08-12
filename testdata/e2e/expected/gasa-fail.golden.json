@@ -97,6 +97,12 @@
       "id": "no-permissions-.github/workflows/bad-pull-request-target.yaml",
       "severity": "high",
       "success": false
+    },
+    {
+      "rule": "workflows/write-all-permissions",
+      "id": "write-all-.github/workflows/bad-write-all.yaml",
+      "severity": "high",
+      "success": false
     }
   ]
 }
