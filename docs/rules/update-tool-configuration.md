@@ -84,10 +84,17 @@ renovate.json5
 
 API calls made:
 
-- `GET /repos/{owner}/{repo}/contents/.github/dependabot.yml`
-- fallback: `GET /repos/{owner}/{repo}/contents/.github/dependabot.yaml`
-- `GET /repos/{owner}/{repo}/contents/<each renovate path>` — stops at first found
+- `GET /repos/{owner}/{repo}/contents/` — root directory listing
+- `GET /repos/{owner}/{repo}/contents/.github` (and `.gitlab`, only when the root listing shows it
+  exists) — directory listings
+- `GET /repos/{owner}/{repo}/contents/<path>` — one fetch per config file the listings proved to
+  exist, in Renovate's own precedence order
 - `GET /repos/{owner}/{repo}/contents/.github/workflows`
+
+The listings replace what used to be one probe per candidate path — eleven requests to establish
+that no update tool exists. If a listing fails or returns at the contents API's 1,000-entry
+truncation cap, the scanner falls back to per-path probing, so a listing problem can only cost
+speed, never correctness.
 
 Decision logic:
 

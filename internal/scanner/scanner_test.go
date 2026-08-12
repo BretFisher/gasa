@@ -439,6 +439,8 @@ func TestScanRepo_EndToEndMixedFindings(t *testing.T) {
 	scanner, mux := newTestScanner(t, true)
 
 	handleJSON(mux, "/repos/owner/repo", map[string]any{"full_name": "owner/repo", "default_branch": "main"})
+	handleContentsListing(mux, "", []*github.RepositoryContent{dirEntry(".github"), fileEntry("go.mod")})
+	handleContentsListing(mux, ".github", []*github.RepositoryContent{fileEntry("dependabot.yml"), dirEntry("workflows")})
 	handleJSON(mux, "/repos/owner/repo/contents/.github/workflows", []*github.RepositoryContent{{
 		Name: github.Ptr("ci.yml"),
 		Path: github.Ptr(".github/workflows/ci.yml"),
@@ -511,6 +513,12 @@ func TestScanRepoWithOptions_IncompleteOnIndeterminateErrors(t *testing.T) {
 	handleJSON(mux, "/repos/owner/repo", map[string]any{"full_name": "owner/repo", "default_branch": "main"})
 	handle404(mux, "/repos/owner/repo/contents/.github/workflows")
 	handleJSON(mux, "/repos/owner/repo/actions/permissions", map[string]any{"enabled": true, "allowed_actions": "selected"})
+	// The directory listings fail too (the trailing-slash pattern catches the
+	// root listing), so the inventory reports itself incomplete and the
+	// collectors fall back to per-path probing — which then hits the 500s
+	// below. Without this the inventory would read the default 404 as an empty
+	// repository and skip the probes entirely.
+	handle500(mux, "/repos/owner/repo/contents/")
 	// Both update-tool config lookups fail indeterminately (server error), so
 	// the scanner cannot tell whether a tool is configured.
 	handle500(mux,
@@ -550,6 +558,8 @@ func TestScanRepoWithOptions_IncludeSuccess(t *testing.T) {
 	scanner, mux := newTestScanner(t, true)
 
 	handleJSON(mux, "/repos/owner/repo", map[string]any{"full_name": "owner/repo", "default_branch": "main"})
+	handleContentsListing(mux, "", []*github.RepositoryContent{dirEntry(".github"), fileEntry("go.mod")})
+	handleContentsListing(mux, ".github", []*github.RepositoryContent{fileEntry("dependabot.yml"), dirEntry("workflows")})
 	handleJSON(mux, "/repos/owner/repo/contents/.github/workflows", []*github.RepositoryContent{{
 		Name: github.Ptr("ci.yml"),
 		Path: github.Ptr(".github/workflows/ci.yml"),

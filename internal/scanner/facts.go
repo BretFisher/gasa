@@ -154,11 +154,23 @@ func (c *factCollector) collectFacts(ctx context.Context, owner, repo string, re
 		dependabot DependabotFacts
 		renovate   RenovateFacts
 	)
-	wg.Add(4)
+
+	// The file inventory (one or two directory listings) is what lets the
+	// Dependabot and Renovate collectors skip absent config paths without a
+	// request each. It runs concurrently with the workflow and settings
+	// collectors, which do not consume it; only the two update-tool collectors
+	// wait for it before starting.
+	invCh := make(chan fileInventory, 1)
+	go func() { invCh <- c.collectFileInventory(ctx, owner, repo, dbg) }()
+
+	wg.Add(2)
 	go func() { defer wg.Done(); workflows = c.collectWorkflowFacts(ctx, owner, repo, dbg) }()
 	go func() { defer wg.Done(); settings = c.collectActionsSettingsFacts(ctx, owner, repo, dbg) }()
-	go func() { defer wg.Done(); dependabot = c.collectDependabotFacts(ctx, owner, repo, false, dbg) }()
-	go func() { defer wg.Done(); renovate = c.collectRenovateFacts(ctx, owner, repo, false, dbg) }()
+
+	inv := <-invCh
+	wg.Add(2)
+	go func() { defer wg.Done(); dependabot = c.collectDependabotFacts(ctx, owner, repo, false, inv, dbg) }()
+	go func() { defer wg.Done(); renovate = c.collectRenovateFacts(ctx, owner, repo, false, inv, dbg) }()
 	wg.Wait()
 
 	hasWorkflows := len(workflows) > 0

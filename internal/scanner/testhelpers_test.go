@@ -101,3 +101,37 @@ func requireContainsLine(t *testing.T, lines []string, want string) {
 
 	t.Fatalf("did not find %q in lines: %+v", want, lines)
 }
+
+// handleContentsListing mocks a directory listing at the given repo-relative
+// directory ("" for the root). The root listing URL carries a trailing slash,
+// which net/http treats as a subtree pattern, so the handler answers only the
+// exact listing URL and returns 404 for anything below it — unregistered file
+// fetches keep behaving exactly as they would on an empty mux.
+func handleContentsListing(mux *http.ServeMux, dir string, entries []*github.RepositoryContent) {
+	base := "/repos/owner/repo/contents/" + dir
+	mux.HandleFunc(base, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != base {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if err := json.NewEncoder(w).Encode(entries); err != nil {
+			panic(err)
+		}
+	})
+}
+
+func fileEntry(name string) *github.RepositoryContent {
+	return &github.RepositoryContent{Type: github.Ptr("file"), Name: github.Ptr(name)}
+}
+
+func dirEntry(name string) *github.RepositoryContent {
+	return &github.RepositoryContent{Type: github.Ptr("dir"), Name: github.Ptr(name)}
+}
+
+// handleJSONResponse writes v as the response body — the encoding half of
+// handleJSON, for handlers that need their own routing or recording logic.
+func handleJSONResponse(w http.ResponseWriter, v any) {
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		panic(fmt.Sprintf("failed to encode test JSON: %v", err))
+	}
+}
