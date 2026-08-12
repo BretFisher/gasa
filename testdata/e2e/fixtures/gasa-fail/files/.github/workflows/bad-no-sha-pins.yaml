@@ -2,6 +2,10 @@
 # Every `uses:` below is pinned to a mutable tag (@v4, @v5...) on purpose.
 # Run `zizmor .` to see the unpinned-uses findings, then `zizmor --fix .`
 # (with a GITHUB_TOKEN set) to rewrite each tag to its commit SHA.
+#
+# Step bodies are deliberately inert: this file demonstrates the dangerous
+# SHAPE for the gasa test suite, so a trigger firing costs nothing and does
+# nothing. Do not add real commands here.
 name: CI
 
 on:
@@ -24,7 +28,7 @@ jobs:
           node-version: 20
 
       - name: Install & test
-        run: npm ci && npm test
+        run: echo "inert fixture step — no commands are executed in this repository"
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
@@ -33,4 +37,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build
-          path: dist/
+          path: README.md
