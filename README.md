@@ -370,7 +370,7 @@ The scanner runs the following checks against each repository. Findings are rate
 
 | Check | Category | Severity | What it fixes |
 |-------|----------|----------|-----------------|
-| [Pull Request Target](docs/rules/pull-request-target.md) | Workflows | Critical | `pull_request_target`, which should never be used in a public repo and is highly discouraged in a private repo |
+| [Pull Request Target](docs/rules/pull-request-target.md) | Workflows | Critical | `pull_request_target`, which should never be used in a public repo; the finding drops to high (never lower) when external contributors cannot open PRs at all |
 | [Action Version Pinning](docs/rules/action-version-pinning.md) | Workflows | High | Actions referenced by tag (`@v4`) or branch (`@main`) instead of commit SHA |
 | [Workflow Permissions](docs/rules/workflow-permissions.md) | Workflows | High | Workflows without an explicit `permissions` block, inheriting overly broad defaults |
 | [Write-All Workflow Permissions](docs/rules/write-all-permissions.md) | Workflows | High | Workflows granting `write-all`, the broadest possible `GITHUB_TOKEN` grant |

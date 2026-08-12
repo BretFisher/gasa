@@ -395,3 +395,47 @@ func TestEvaluateWriteAllPermissionsRule(t *testing.T) {
 		}
 	})
 }
+
+// pull_request_target's blast radius depends on whether an external contributor
+// can open a PR at all. The severity must track that — and must fail severe
+// when the policy is unknown, so a new GitHub enum value can only over-report.
+func TestEvaluateDangerousWorkflowRule_SeverityTracksPRCreationPolicy(t *testing.T) {
+	prtWorkflow := func(t *testing.T) []WorkflowFact {
+		t.Helper()
+		content := "on: pull_request_target\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n"
+		workflow := &WorkflowFile{}
+		if err := yaml.Unmarshal([]byte(content), workflow); err != nil {
+			t.Fatalf("yaml.Unmarshal() error: %v", err)
+		}
+		return []WorkflowFact{{Path: ".github/workflows/prt.yml", Content: content, Workflow: workflow, Valid: true}}
+	}
+
+	cases := []struct {
+		name         string
+		facts        *ScanFacts
+		wantSeverity string
+		wantRestrict bool
+	}{
+		{"public, policy all", &ScanFacts{Repository: &github.Repository{Private: github.Ptr(false)}, PullRequestCreationPolicy: "all"}, SeverityCritical, false},
+		{"public, policy unknown stays critical", &ScanFacts{Repository: &github.Repository{}}, SeverityCritical, false},
+		{"public, collaborators only", &ScanFacts{Repository: &github.Repository{Private: github.Ptr(false)}, PullRequestCreationPolicy: "collaborators_only"}, SeverityHigh, true},
+		{"private repository", &ScanFacts{Repository: &github.Repository{Private: github.Ptr(true)}, PullRequestCreationPolicy: "all"}, SeverityHigh, true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.facts.Workflows = prtWorkflow(t)
+			findings := evaluateDangerousWorkflowRule(tc.facts)
+			if len(findings) != 1 {
+				t.Fatalf("findings = %+v, want one", findings)
+			}
+			if findings[0].Severity != tc.wantSeverity {
+				t.Fatalf("severity = %q, want %q", findings[0].Severity, tc.wantSeverity)
+			}
+			restricted := strings.Contains(findings[0].Title, "restricted")
+			if restricted != tc.wantRestrict {
+				t.Fatalf("title = %q, restricted-variant = %v, want %v", findings[0].Title, restricted, tc.wantRestrict)
+			}
+		})
+	}
+}

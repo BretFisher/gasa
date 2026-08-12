@@ -1426,13 +1426,16 @@ Candidates, in rough order of value:
    nothing breaks), OFF for `gasa-fail`. The fixtures tool now declares, verifies, and applies the
    setting
 
-3. **`pull_request_creation_policy` (from R16).** Present on the repository object the scanner already
-   fetches. `gasa-fail` reports `collaborators_only`, `gasa-pass` reports `all`. It is the control that
-   determines whether external contributors can open pull requests at all, making it the single setting
-   that most directly neutralizes `pull_request_target` risk on a public repo. Two designs: a
-   standalone rule, or context that modulates the `pull-request-target` rule's severity. The second is
-   more useful but couples two rules, which the rule engine does not currently support and Phase 7 has
-   not designed for
+3. ~~**`pull_request_creation_policy` (from R16).**~~ **Done 2026-08-12** as severity modulation
+   inside the `pull-request-target` rule — the design PLAN preferred but deferred over rule-coupling
+   concerns. It is not rule coupling: the policy is a *fact* (read from the same `GET /repos` response
+   the scan always made, decoded via a wrapper struct because go-github v84 does not model the field),
+   and rules consuming facts is exactly what the fact model is for. The finding stays critical by
+   default and drops to high — never lower — when the repository is private or its policy is
+   `collaborators_only`, the one value proven to block external PR creation. Unknown or new policy
+   values keep the critical reading, so GitHub adding an enum value can only over-report. `gasa-fail`
+   is exactly this case (public + `collaborators_only`), so its golden finding moves critical → high,
+   which is more accurate: that mitigation is real and the audit verified it live
 
 Implementation requirements for any of these:
 
