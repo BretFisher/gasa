@@ -1302,7 +1302,13 @@ Phase C cannot begin until this stack is merged: PRs #34 and #39 change rule out
    Actions settings. Verified live: 10 of 10 rules report, and exactly rules 9 and 10 fail. Two code
    defects were found in the process — see P1 and P2 below. **Still outstanding: re-scope
    `E2E_REPO_PAT` to include this repository** (see below)
-10. Optional: good Renovate config on `gasa-pass`, which doubles as the live regression test for R20
+10. ~~Optional: good Renovate config on `gasa-pass`~~ **Done 2026-08-12.** `renovate.json` extending
+    `config:best-practices` added to the fixture. This exercises the Renovate fetch/parse path and
+    rule 8's both-tools branch end to end. One honest caveat discovered while landing it: it is
+    **not** a live R20 regression test for the must-pass direction, because `actionsPinningState`
+    short-circuits on gasa-pass's Dependabot `github-actions` entry before preset resolution runs.
+    The preset table's must-NOT-pass direction (`config:recommended`) is what `gasa-fail-private`
+    covers live; the must-pass direction rests on unit tests
 11. Hygiene: make fixture workflow `run:` steps inert (`gasa-fail` only; the new fixture already is)
 
 Decided 2026-08-11: **Dependabot is not suppressed on the fixture repositories.** Churn is accepted and `fixtures-apply` reverts it, which needs no extra setup and self-heals. This closes R2 and R14.
