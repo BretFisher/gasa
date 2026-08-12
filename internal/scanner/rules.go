@@ -47,6 +47,7 @@ var runFuncs = map[string]func(*ScanFacts) []Finding{
 	ruleNamePullRequestTarget:          evaluateDangerousWorkflowRule,
 	ruleNameActionVersionPinning:       evaluateActionVersionPinningRule,
 	ruleNameWorkflowPermissions:        evaluateWorkflowPermissionsRule,
+	ruleNameWriteAllPermissions:        evaluateWriteAllPermissionsRule,
 	ruleNameAllowedActionsPolicy:       evaluateAllowedActionsPolicyRule,
 	ruleNameDefaultWorkflowPermissions: evaluateDefaultWorkflowPermissionsRule,
 	ruleNameActionsCanApprovePRs:       evaluateActionsCanApprovePRsRule,
@@ -279,6 +280,8 @@ func successFindingForRule(r rule, facts *ScanFacts, cfg *Config) *Finding {
 	case ruleNameActionVersionPinning:
 		return successMessage(r.Name, severity, "Workflow files", "pass", nil)
 	case ruleNameWorkflowPermissions:
+		return successMessage(r.Name, severity, "Workflow files", "pass", nil)
+	case ruleNameWriteAllPermissions:
 		return successMessage(r.Name, severity, "Workflow files", "pass", nil)
 	case ruleNameAllowedActionsPolicy:
 		return allowedActionsSuccessFinding(r.Name, severity, facts)
@@ -687,6 +690,34 @@ func evaluateWorkflowPermissionsRule(facts *ScanFacts) []Finding {
 			File:        wf.Path,
 			Remediation: msg.Fix,
 		})
+	}
+	return findings
+}
+
+// evaluateWriteAllPermissionsRule flags `permissions: write-all` at the
+// workflow or job level. Deliberately narrow: only the literal write-all is
+// unambiguous enough to flag without a false-positive boundary — individual
+// write scopes are routinely legitimate, and workflow-permissions already
+// covers the missing-permissions case. Jobless files are skipped for the same
+// reason workflow-permissions skips them: they are not runnable workflows, and
+// the collector already reports them as an incomplete-scan warning.
+func evaluateWriteAllPermissionsRule(facts *ScanFacts) []Finding {
+	var findings []Finding
+	for _, wf := range facts.Workflows {
+		if !wf.Valid || len(wf.Workflow.Jobs) == 0 {
+			continue
+		}
+		for _, grant := range writeAllGrants(wf.Workflow) {
+			msg := ruleMessage(ruleNameWriteAllPermissions, "write-all", map[string]string{"Where": grant.where})
+			findings = append(findings, Finding{
+				ID:          grant.findingID(wf.Path),
+				Severity:    SeverityHigh,
+				Title:       msg.Title,
+				Description: msg.Description,
+				File:        wf.Path,
+				Remediation: msg.Fix,
+			})
+		}
 	}
 	return findings
 }

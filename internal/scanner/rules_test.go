@@ -9,8 +9,8 @@ import (
 
 func TestAvailableRules_Count(t *testing.T) {
 	rules := AvailableRules()
-	if got := len(rules); got != 10 {
-		t.Errorf("AvailableRules() returned %d rules, want 10", got)
+	if got := len(rules); got != 11 {
+		t.Errorf("AvailableRules() returned %d rules, want 11", got)
 	}
 }
 

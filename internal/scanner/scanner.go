@@ -26,6 +26,7 @@ const (
 	ruleNamePullRequestTarget          = "workflows/pull-request-target"
 	ruleNameActionVersionPinning       = "workflows/action-version-pinning"
 	ruleNameWorkflowPermissions        = "workflows/workflow-permissions"
+	ruleNameWriteAllPermissions        = "workflows/write-all-permissions"
 	ruleNameAllowedActionsPolicy       = "actions/permissions/allowed-actions-policy"
 	ruleNameDefaultWorkflowPermissions = "actions/permissions/workflow/default-workflow-permissions"
 	ruleNameActionsCanApprovePRs       = "actions/permissions/workflow/actions-can-approve-prs"

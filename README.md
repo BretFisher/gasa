@@ -373,13 +373,14 @@ The scanner runs the following checks against each repository. Findings are rate
 | [Pull Request Target](docs/rules/pull-request-target.md) | Workflows | Critical | `pull_request_target`, which should never be used in a public repo and is highly discouraged in a private repo |
 | [Action Version Pinning](docs/rules/action-version-pinning.md) | Workflows | High | Actions referenced by tag (`@v4`) or branch (`@main`) instead of commit SHA |
 | [Workflow Permissions](docs/rules/workflow-permissions.md) | Workflows | High | Workflows without an explicit `permissions` block, inheriting overly broad defaults |
+| [Write-All Workflow Permissions](docs/rules/write-all-permissions.md) | Workflows | High | Workflows granting `write-all`, the broadest possible `GITHUB_TOKEN` grant |
 | [Default Workflow Permissions](docs/rules/default-workflow-permissions.md) | Settings | High | Repository default `GITHUB_TOKEN` set to read-write instead of read-only |
 | [Allowed Actions Policy](docs/rules/allowed-actions-policy.md) | Settings | Medium | Repository allows all actions to run instead of restricting to trusted sources |
 | [Actions Can Approve PRs](docs/rules/actions-can-approve-prs.md) | Settings | Medium | Workflows can create and approve pull request reviews, bypassing required reviews |
 | [Fork PR Workflow Approval](docs/rules/fork-pr-workflow-approval.md) | Settings | High | External contributors can trigger fork PR workflows without maintainer approval |
 | [Update Tool Configuration](docs/rules/update-tool-configuration.md) | Updates | Medium | No Dependabot or Renovate config, invalid config, or missing `github-actions` coverage |
 | [Update Tool GitHub Actions Cooldown](docs/rules/update-tool-actions-cooldown.md) | Updates | Low | Neither Dependabot nor Renovate sets a cooldown delay for `github-actions` updates |
-| [Renovate GitHub Actions Pinning](docs/rules/update-tool-actions-pinning.md) | Updates | Medium | Renovate is not configured to pin actions to immutable commit SHAs (Dependabot has no equivalent option) |
+| [Update Tool GitHub Actions Pinning](docs/rules/update-tool-actions-pinning.md) | Updates | Medium | No update tool will keep action commit SHAs current — Renovate without digest pinning and no Dependabot `github-actions` entry |
 
 ## Build
 

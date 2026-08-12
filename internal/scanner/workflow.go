@@ -363,3 +363,51 @@ func sanitizeID(s string) string {
 	s = strings.ReplaceAll(s, "@", "-")
 	return s
 }
+
+// writeAllGrant records one place a workflow granted write-all: the workflow
+// level (job == "") or a named job.
+type writeAllGrant struct {
+	job   string
+	where string
+}
+
+// findingID keeps write-all findings unique per grant site, so a workflow-level
+// grant and a job-level grant in the same file never collide in dedupe.
+func (g writeAllGrant) findingID(path string) string {
+	if g.job == "" {
+		return "write-all-" + path
+	}
+	return "write-all-" + path + "-" + sanitizeID(g.job)
+}
+
+// writeAllGrants returns every write-all permission grant in the workflow, in
+// deterministic order: the workflow level first, then jobs sorted by name (job
+// iteration order is a map walk otherwise, and findings ordering must be
+// stable).
+func writeAllGrants(workflow *WorkflowFile) []writeAllGrant {
+	var grants []writeAllGrant
+	if isWriteAll(workflow.Permissions) {
+		grants = append(grants, writeAllGrant{where: "at the workflow level"})
+	}
+
+	jobNames := make([]string, 0, len(workflow.Jobs))
+	for name := range workflow.Jobs {
+		jobNames = append(jobNames, name)
+	}
+	sort.Strings(jobNames)
+	for _, name := range jobNames {
+		if isWriteAll(workflow.Jobs[name].Permissions) {
+			grants = append(grants, writeAllGrant{job: name, where: fmt.Sprintf("on job %q", name)})
+		}
+	}
+	return grants
+}
+
+// isWriteAll reports whether a permissions value is the literal write-all
+// grant. Only the scalar form exists — `permissions: write-all` — so a map
+// value can never match. read-all is deliberately not matched: it grants no
+// write access.
+func isWriteAll(permissions interface{}) bool {
+	s, ok := permissions.(string)
+	return ok && s == "write-all"
+}
