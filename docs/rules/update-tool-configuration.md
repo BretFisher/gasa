@@ -92,8 +92,8 @@ API calls made:
 - `GET /repos/{owner}/{repo}/contents/.github/workflows`
 
 The listings replace what used to be one probe per candidate path — eleven requests to establish
-that no update tool exists. If a listing fails or returns at the contents API's 1,000-entry
-truncation cap, the scanner falls back to per-path probing, so a listing problem can only cost
+that no update tool exists. If a listing fails or returns at the 1,000-entry truncation cap
+of the contents API, the scanner falls back to per-path probing, so a listing problem can only cost
 speed, never correctness.
 
 Decision logic:
