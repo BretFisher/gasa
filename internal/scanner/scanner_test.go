@@ -447,7 +447,7 @@ func TestScanRepo_EndToEndMixedFindings(t *testing.T) {
 	}})
 	workflow := "on: pull_request_target\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n"
 	handleJSON(mux, "/repos/owner/repo/contents/.github/workflows/ci.yml", encodedContent(".github/workflows/ci.yml", workflow))
-	handleJSON(mux, "/repos/owner/repo/actions/permissions", map[string]any{"enabled": true, "allowed_actions": "all"})
+	handleJSON(mux, "/repos/owner/repo/actions/permissions", map[string]any{"enabled": true, "allowed_actions": "all", "sha_pinning_required": false})
 	handleJSON(mux, "/repos/owner/repo/actions/permissions/workflow", map[string]any{"default_workflow_permissions": "write", "can_approve_pull_request_reviews": true})
 	handleJSON(mux, "/repos/owner/repo/actions/permissions/fork-pr-contributor-approval", map[string]any{"approval_policy": "first_time_contributors"})
 	depConfig := "version: 2\nupdates:\n  - package-ecosystem: gomod\n    directory: /\n    schedule:\n      interval: weekly\n"
@@ -476,8 +476,8 @@ func TestScanRepo_EndToEndMixedFindings(t *testing.T) {
 	if result.RepoFullName != "owner/repo" {
 		t.Fatalf("RepoFullName = %s", result.RepoFullName)
 	}
-	if len(result.Findings) != 8 {
-		t.Fatalf("len(findings) = %d, want 8\nfindings=%+v", len(result.Findings), result.Findings)
+	if len(result.Findings) != 9 {
+		t.Fatalf("len(findings) = %d, want 9\nfindings=%+v", len(result.Findings), result.Findings)
 	}
 
 	wantIDs := map[string]bool{
@@ -488,6 +488,7 @@ func TestScanRepo_EndToEndMixedFindings(t *testing.T) {
 		"settings-default-permissions-write":                    false,
 		"settings-actions-can-approve-prs":                      false,
 		"settings-fork-pr-contributor-approval-too-permissive":  false,
+		"settings-sha-pinning-not-required":                     false,
 		"update-tool-missing-actions":                           false,
 	}
 	for _, finding := range result.Findings {
@@ -566,7 +567,7 @@ func TestScanRepoWithOptions_IncludeSuccess(t *testing.T) {
 	}})
 	workflow := "on: pull_request\npermissions: {}\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@0123456789012345678901234567890123456789\n"
 	handleJSON(mux, "/repos/owner/repo/contents/.github/workflows/ci.yml", encodedContent(".github/workflows/ci.yml", workflow))
-	handleJSON(mux, "/repos/owner/repo/actions/permissions", map[string]any{"enabled": true, "allowed_actions": "selected"})
+	handleJSON(mux, "/repos/owner/repo/actions/permissions", map[string]any{"enabled": true, "allowed_actions": "selected", "sha_pinning_required": true})
 	handleJSON(mux, "/repos/owner/repo/actions/permissions/workflow", map[string]any{"default_workflow_permissions": "read", "can_approve_pull_request_reviews": false})
 	handleJSON(mux, "/repos/owner/repo/actions/permissions/fork-pr-contributor-approval", map[string]any{"approval_policy": "all_external_contributors"})
 	depConfig := "version: 2\nupdates:\n  - package-ecosystem: github-actions\n    directory: /\n    schedule:\n      interval: weekly\n    cooldown:\n      default-days: 7\n  - package-ecosystem: gomod\n    directory: /\n    schedule:\n      interval: weekly\n"

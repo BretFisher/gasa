@@ -82,6 +82,7 @@ func diffActions(repo string, want, got Actions) []string {
 
 	add("enabled", boolText(want.Enabled), boolText(got.Enabled))
 	add("allowed_actions", want.AllowedActions, got.AllowedActions)
+	add("sha_pinning_required", boolText(want.SHAPinningRequired), boolText(got.SHAPinningRequired))
 	add("default_workflow_permissions", want.DefaultWorkflowPermissions, got.DefaultWorkflowPermissions)
 	add("can_approve_pull_request_reviews", boolText(want.CanApprovePullRequestReviews), boolText(got.CanApprovePullRequestReviews))
 	add("fork_pr_contributor_approval", want.ForkPRContributorApproval, got.ForkPRContributorApproval)
@@ -156,18 +157,8 @@ func putFile(ctx context.Context, client *github.Client, owner, name, path, cont
 func applyActions(ctx context.Context, client *github.Client, owner, name string, f fixture) error {
 	a := f.Actions
 
-	if a.Enabled != nil || a.AllowedActions != "" {
-		perms := &github.ActionsPermissionsRepository{}
-		if a.Enabled != nil {
-			perms.Enabled = a.Enabled
-		}
-		if a.AllowedActions != "" {
-			perms.AllowedActions = github.Ptr(a.AllowedActions)
-		}
-		if _, _, err := client.Repositories.UpdateActionsPermissions(ctx, owner, name, *perms); err != nil {
-			return fmt.Errorf("%s: set actions permissions: %w", f.Repo, err)
-		}
-		fmt.Printf("  set allowed_actions=%s\n", a.AllowedActions)
+	if err := applyActionsPermissions(ctx, client, owner, name, f.Repo, a); err != nil {
+		return err
 	}
 
 	if a.DefaultWorkflowPermissions != "" || a.CanApprovePullRequestReviews != nil {
@@ -195,6 +186,27 @@ func applyActions(ctx context.Context, client *github.Client, owner, name string
 		fmt.Printf("  set fork_pr_contributor_approval=%s\n", a.ForkPRContributorApproval)
 	}
 
+	return nil
+}
+
+// applyActionsPermissions writes the top-level Actions permissions (enablement,
+// allowed-actions policy, SHA-pinning enforcement) when the manifest declares
+// any of them.
+func applyActionsPermissions(ctx context.Context, client *github.Client, owner, name, repoFull string, a Actions) error {
+	if a.Enabled == nil && a.AllowedActions == "" && a.SHAPinningRequired == nil {
+		return nil
+	}
+	perms := github.ActionsPermissionsRepository{
+		Enabled:            a.Enabled,
+		SHAPinningRequired: a.SHAPinningRequired,
+	}
+	if a.AllowedActions != "" {
+		perms.AllowedActions = github.Ptr(a.AllowedActions)
+	}
+	if _, _, err := client.Repositories.UpdateActionsPermissions(ctx, owner, name, perms); err != nil {
+		return fmt.Errorf("%s: set actions permissions: %w", repoFull, err)
+	}
+	fmt.Printf("  set allowed_actions=%s sha_pinning_required=%s\n", a.AllowedActions, boolText(a.SHAPinningRequired))
 	return nil
 }
 

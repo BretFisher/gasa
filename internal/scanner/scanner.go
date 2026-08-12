@@ -34,6 +34,7 @@ const (
 	ruleNameUpdateToolConfiguration    = "updates/update-tool-configuration"
 	ruleNameUpdateToolActionsCooldown  = "updates/update-tool-actions-cooldown"
 	ruleNameUpdateToolActionsPinning   = "updates/update-tool-actions-pinning"
+	ruleNameSHAPinningRequired         = "actions/permissions/sha-pinning-required"
 
 	// Finding IDs
 	findingIDSettingsCheckFailed      = "settings-check-failed"
@@ -55,6 +56,7 @@ const (
 	findingIDDefaultPermissionsWrite = "settings-default-permissions-write"
 	findingIDActionsCanApprovePRs    = "settings-actions-can-approve-prs"
 	findingIDForkPRTooPermissive     = "settings-fork-pr-contributor-approval-too-permissive"
+	findingIDSHAPinningNotRequired   = "settings-sha-pinning-not-required"
 
 	// GitHub Actions permission values
 	actionsAllowedAll         = "all"
@@ -286,7 +288,7 @@ func buildFixURL(f Finding, owner, repo, defaultBranch string) string {
 		return settingsURL
 	case findingIDDefaultPermissionsWrite, findingIDActionsCanApprovePRs:
 		return settingsURL
-	case findingIDForkPRTooPermissive:
+	case findingIDForkPRTooPermissive, findingIDSHAPinningNotRequired:
 		return settingsURL
 	case findingIDNoUpdateTool:
 		return fmt.Sprintf("%s/new/%s?filename=%s", repoURL, pathEscapeSegments(defaultBranch), url.QueryEscape(defaultDependabotPath))

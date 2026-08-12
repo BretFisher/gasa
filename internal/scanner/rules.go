@@ -52,6 +52,7 @@ var runFuncs = map[string]func(*ScanFacts) []Finding{
 	ruleNameDefaultWorkflowPermissions: evaluateDefaultWorkflowPermissionsRule,
 	ruleNameActionsCanApprovePRs:       evaluateActionsCanApprovePRsRule,
 	ruleNameForkPRContributorApproval:  evaluateForkPRContributorApprovalRule,
+	ruleNameSHAPinningRequired:         evaluateSHAPinningRequiredRule,
 	ruleNameUpdateToolConfiguration:    evaluateUpdateToolConfigurationRule,
 	ruleNameUpdateToolActionsCooldown:  evaluateUpdateToolActionsCooldownRule,
 	ruleNameUpdateToolActionsPinning:   evaluateUpdateToolActionsPinningRule,
@@ -291,6 +292,8 @@ func successFindingForRule(r rule, facts *ScanFacts, cfg *Config) *Finding {
 		return actionsApprovePRsSuccessFinding(r.Name, severity, facts)
 	case ruleNameForkPRContributorApproval:
 		return forkPRApprovalSuccessFinding(r.Name, severity, facts)
+	case ruleNameSHAPinningRequired:
+		return shaPinningRequiredSuccessFinding(r.Name, severity, facts)
 	case ruleNameUpdateToolConfiguration:
 		return updateToolConfigurationSuccessFinding(r.Name, severity, facts)
 	case ruleNameUpdateToolActionsCooldown:
@@ -398,6 +401,22 @@ func forkPRApprovalSuccessFinding(ruleName, severity string, facts *ScanFacts) *
 		return nil
 	}
 	return successMessage(ruleName, severity, "Repository Actions settings", "pass-all-external", nil)
+}
+
+func shaPinningRequiredSuccessFinding(ruleName, severity string, facts *ScanFacts) *Finding {
+	if !actionsSettingsEnabled(facts) {
+		if !actionsObservedDisabled(facts) {
+			// The settings were never read. Claiming they are safely disabled
+			// would invent an observation.
+			return nil
+		}
+		return successMessage(ruleName, severity, "Repository Actions settings", "pass-disabled", nil)
+	}
+	permissions := facts.ActionsSettings.Permissions
+	if permissions.SHAPinningRequired == nil || !*permissions.SHAPinningRequired {
+		return nil
+	}
+	return successMessage(ruleName, severity, "Repository Actions settings", "pass", nil)
 }
 
 func updateToolConfigurationSuccessFinding(ruleName, severity string, facts *ScanFacts) *Finding {
@@ -827,6 +846,39 @@ func evaluateForkPRContributorApprovalRule(facts *ScanFacts) []Finding {
 		Description: msg.Description,
 		Remediation: msg.Fix,
 	})
+
+	return findings
+}
+
+// evaluateSHAPinningRequiredRule checks the repository setting that makes SHA
+// pinning an enforced rule rather than a convention. It rides in the same
+// /actions/permissions response the allowed-actions rule reads, so it costs no
+// additional API call. Complements action-version-pinning: that rule proves the
+// files are pinned today, this setting stops an unpinned reference running
+// tomorrow.
+func evaluateSHAPinningRequiredRule(facts *ScanFacts) []Finding {
+	findings := make([]Finding, 0)
+	findings = appendSettingsAccessFinding(findings, facts)
+
+	if undetermined := undeterminedFindingFor(facts, ruleNameSHAPinningRequired, settingSHAPinning); undetermined != nil {
+		return append(findings, *undetermined)
+	}
+
+	permissions := facts.ActionsSettings.Permissions
+	if !actionsSettingsEnabled(facts) || permissions.SHAPinningRequired == nil {
+		return findings
+	}
+
+	if !*permissions.SHAPinningRequired {
+		msg := ruleMessage(ruleNameSHAPinningRequired, "not-required", nil)
+		findings = append(findings, Finding{
+			ID:          findingIDSHAPinningNotRequired,
+			Severity:    SeverityMedium,
+			Title:       msg.Title,
+			Description: msg.Description,
+			Remediation: msg.Fix,
+		})
+	}
 
 	return findings
 }

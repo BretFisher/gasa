@@ -1417,12 +1417,14 @@ Candidates, in rough order of value:
    would need the boundary decision this deliberately avoids. Fail fixture: `bad-write-all.yaml`
    on `gasa-fail`, built so no other rule fires on it
 
-2. **`sha_pinning_required` repository setting (from R8).** Present in the `GET
-   /repos/{owner}/{repo}/actions/permissions` response that `allowed-actions-policy` already parses. It
-   is GitHub's enforcement of "require actions pinned to a full-length commit SHA". Complements
-   `action-version-pinning` precisely: that rule proves the files are pinned today, this setting
-   prevents an unpinned ref landing tomorrow. Fixture consequence: both repos currently report `false`,
-   so `gasa-pass` needs the setting enabled before it could pass
+2. ~~**`sha_pinning_required` repository setting (from R8).**~~ **Done 2026-08-12** as
+   `actions/permissions/sha-pinning-required` (medium). Zero additional API calls — the flag rides
+   in the /actions/permissions response the allowed-actions rule already reads. An absent value
+   (older GHES) reports undetermined rather than staying silent, and a transient settings failure
+   marks it undetermined alongside the other four settings rules. Fixture states applied live:
+   enforcement ON for `gasa-pass` and `gasa-fail-private` (all their workflows are SHA-pinned, so
+   nothing breaks), OFF for `gasa-fail`. The fixtures tool now declares, verifies, and applies the
+   setting
 
 3. **`pull_request_creation_policy` (from R16).** Present on the repository object the scanner already
    fetches. `gasa-fail` reports `collaborators_only`, `gasa-pass` reports `all`. It is the control that

@@ -9,8 +9,8 @@ import (
 
 func TestAvailableRules_Count(t *testing.T) {
 	rules := AvailableRules()
-	if got := len(rules); got != 11 {
-		t.Errorf("AvailableRules() returned %d rules, want 11", got)
+	if got := len(rules); got != 12 {
+		t.Errorf("AvailableRules() returned %d rules, want 12", got)
 	}
 }
 
@@ -133,8 +133,8 @@ func TestResolveRules_BySeverity(t *testing.T) {
 		}
 	}
 
-	if len(resolved) != 5 {
-		t.Fatalf("resolved %d rules, want 5", len(resolved))
+	if len(resolved) != 6 {
+		t.Fatalf("resolved %d rules, want 6", len(resolved))
 	}
 }
 
