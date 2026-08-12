@@ -89,7 +89,7 @@
     {
       "rule": "workflows/pull-request-target",
       "id": "dangerous-trigger-.github/workflows/bad-pull-request-target.yaml",
-      "severity": "critical",
+      "severity": "high",
       "success": false
     },
     {
