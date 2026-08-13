@@ -620,12 +620,12 @@ func externalPRCreationRestricted(facts *ScanFacts) bool {
 func evaluateDangerousWorkflowRule(facts *ScanFacts) []Finding {
 	// The trigger is the same, but the blast radius is not: where external
 	// contributors cannot open PRs at all, there is no untrusted head for the
-	// workflow to check out today. High instead of critical — the mitigation is
-	// a repository setting, one click away from disappearing, so it never
+	// workflow to check out today. Medium instead of critical — the mitigation
+	// is a repository setting, one click away from disappearing, so it never
 	// downgrades further than that.
 	severity, msgKey := SeverityCritical, "used"
 	if externalPRCreationRestricted(facts) {
-		severity, msgKey = SeverityHigh, "used-restricted"
+		severity, msgKey = SeverityMedium, "used-restricted"
 	}
 
 	var findings []Finding

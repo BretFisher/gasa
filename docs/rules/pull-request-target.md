@@ -27,7 +27,7 @@ messages:
       repository (it is private, or its pull request creation policy is limited
       to collaborators), so there is no untrusted pull request for the workflow
       to act on today — but that mitigation is a repository setting, one click
-      away from disappearing, which is why this is high rather than resolved.
+      away from disappearing, which is why this is medium rather than resolved.
     fix: >-
       Use the `pull_request` event instead. If you cannot avoid
       `pull_request_target`, keep the workflow limited to trusted base-branch
@@ -69,7 +69,7 @@ This rule does not try to prove whether the workflow later checks out untrusted 
 
 ### Severity
 
-The finding is **critical** by default. It drops to **high** — never lower — when external
+The finding is **critical** by default. It drops to **medium** — never lower — when external
 contributors cannot open pull requests against the repository at all: the repository is private, or
 its `pull_request_creation_policy` is `collaborators_only`. In that state there is no untrusted
 pull request for the workflow to act on, but the protection is a repository setting rather than a

@@ -1431,10 +1431,10 @@ Candidates, in rough order of value:
    concerns. It is not rule coupling: the policy is a *fact* (read from the same `GET /repos` response
    the scan always made, decoded via a wrapper struct because go-github v84 does not model the field),
    and rules consuming facts is exactly what the fact model is for. The finding stays critical by
-   default and drops to high — never lower — when the repository is private or its policy is
+   default and drops to medium — never lower — when the repository is private or its policy is
    `collaborators_only`, the one value proven to block external PR creation. Unknown or new policy
    values keep the critical reading, so GitHub adding an enum value can only over-report. `gasa-fail`
-   is exactly this case (public + `collaborators_only`), so its golden finding moves critical → high,
+   is exactly this case (public + `collaborators_only`), so its golden finding moves critical → medium,
    which is more accurate: that mitigation is real and the audit verified it live
 
 Implementation requirements for any of these:

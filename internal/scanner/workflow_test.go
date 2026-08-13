@@ -418,8 +418,8 @@ func TestEvaluateDangerousWorkflowRule_SeverityTracksPRCreationPolicy(t *testing
 	}{
 		{"public, policy all", &ScanFacts{Repository: &github.Repository{Private: github.Ptr(false)}, PullRequestCreationPolicy: "all"}, SeverityCritical, false},
 		{"public, policy unknown stays critical", &ScanFacts{Repository: &github.Repository{}}, SeverityCritical, false},
-		{"public, collaborators only", &ScanFacts{Repository: &github.Repository{Private: github.Ptr(false)}, PullRequestCreationPolicy: "collaborators_only"}, SeverityHigh, true},
-		{"private repository", &ScanFacts{Repository: &github.Repository{Private: github.Ptr(true)}, PullRequestCreationPolicy: "all"}, SeverityHigh, true},
+		{"public, collaborators only", &ScanFacts{Repository: &github.Repository{Private: github.Ptr(false)}, PullRequestCreationPolicy: "collaborators_only"}, SeverityMedium, true},
+		{"private repository", &ScanFacts{Repository: &github.Repository{Private: github.Ptr(true)}, PullRequestCreationPolicy: "all"}, SeverityMedium, true},
 	}
 
 	for _, tc := range cases {
