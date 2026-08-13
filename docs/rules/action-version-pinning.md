@@ -142,7 +142,7 @@ findings by default. Two mitigations shrink the window:
 ### Relation to GitHub's SHA-pinning enforcement setting
 
 GitHub's repository setting **"Require actions to be pinned to a full-length commit SHA"** (see the
-[`sha-pinning-required`](sha-pinning-required.md) rule) enforces SHA pinning at run time, with one
+[`sha-pinning-required`](sha-pinning-required.md) rule) enforces SHA pinning at runtime, with one
 documented exemption: "Reusable workflows can still be referenced by tag." Note the exemption is
 for **tags only** — a reusable workflow referenced by *branch* is still refused when enforcement is
 on. So a same-owner reusable workflow pinned to a version tag survives enforcement, but one pinned
