@@ -17,15 +17,16 @@ func (c *factCollector) addWarning(area, detail string) {
 }
 
 type ScanFacts struct {
-	Repository                              *github.Repository
-	RepositoryOwner                         string
-	DefaultBranch                           string
-	Workflows                               []WorkflowFact
-	ActionsSettings                         ActionsSettingsFacts
-	Dependabot                              DependabotFacts
-	Renovate                                RenovateFacts
-	ActionVersionPinningIgnoreSameOwner     bool
-	UpdateToolConfigurationRequireWorkflows bool
+	Repository                                           *github.Repository
+	RepositoryOwner                                      string
+	DefaultBranch                                        string
+	Workflows                                            []WorkflowFact
+	ActionsSettings                                      ActionsSettingsFacts
+	Dependabot                                           DependabotFacts
+	Renovate                                             RenovateFacts
+	ActionVersionPinningIgnoreSameOwnerActions           bool
+	ActionVersionPinningIgnoreSameOwnerReusableWorkflows bool
+	UpdateToolConfigurationRequireWorkflows              bool
 
 	// Incomplete lists facts that could not be determined because a GitHub
 	// request failed for a reason other than a clean 404 (timeout, rate limit,
@@ -146,11 +147,12 @@ type factCollector struct {
 
 func (c *factCollector) collectFacts(ctx context.Context, owner, repo string, repository *github.Repository, cfg *Config, dbg DebugLogger) *ScanFacts {
 	facts := &ScanFacts{
-		Repository:                              repository,
-		RepositoryOwner:                         owner,
-		DefaultBranch:                           "HEAD",
-		ActionVersionPinningIgnoreSameOwner:     cfg.actionVersionPinningIgnoreSameOwner(),
-		UpdateToolConfigurationRequireWorkflows: cfg.updateToolConfigurationRequireWorkflows(),
+		Repository:      repository,
+		RepositoryOwner: owner,
+		DefaultBranch:   "HEAD",
+		ActionVersionPinningIgnoreSameOwnerActions:           cfg.actionVersionPinningIgnoreSameOwnerActions(),
+		ActionVersionPinningIgnoreSameOwnerReusableWorkflows: cfg.actionVersionPinningIgnoreSameOwnerReusableWorkflows(),
+		UpdateToolConfigurationRequireWorkflows:              cfg.updateToolConfigurationRequireWorkflows(),
 	}
 
 	if repository != nil && repository.DefaultBranch != nil && *repository.DefaultBranch != "" {

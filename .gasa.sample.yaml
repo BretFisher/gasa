@@ -28,10 +28,14 @@ overrides:
 # Configure rule-specific behavior.
 rule_options:
   workflows/action-version-pinning:
-    # Ignore mutable refs for actions in the same GitHub owner as the repo
-    # being scanned. This is useful when you control those actions through
-    # your own release and update process.
-    ignore_same_owner: true
+    # Ignore mutable refs owned by the same GitHub user/org as the repo being
+    # scanned. Without these, same-owner refs still flag: low when pinned to a
+    # version tag, medium when pinned to a branch. Use them when you control
+    # those repos through your own release and update process.
+    ignore_same_owner_actions: true
+    ignore_same_owner_reusable_workflows: true
+    # Legacy shorthand for enabling both options above:
+    # ignore_same_owner: true
 
   updates/update-tool-configuration:
     # Only run the update tool configuration rule when the repository actually
