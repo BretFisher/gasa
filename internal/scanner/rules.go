@@ -605,38 +605,83 @@ func actionsObservedDisabled(facts *ScanFacts) bool {
 // over-report, never under-report.
 const prCreationPolicyCollaboratorsOnly = "collaborators_only"
 
-// externalPRCreationRestricted reports whether external contributors are unable
-// to open pull requests against this repository — private repositories take
-// only collaborator PRs by nature, and the creation policy can restrict public
-// ones the same way. When true there is no untrusted pull request for a
-// pull_request_target workflow to act on today.
-func externalPRCreationRestricted(facts *ScanFacts) bool {
-	if facts.Repository.GetPrivate() {
-		return true
+// dangerousTriggerBase grades how exposed a pull_request_target workflow is to
+// untrusted pull requests, returning the base severity and the message key
+// that explains it. The trigger is the same in every cell; what changes is who
+// can reach it:
+//
+//	public,  external PRs open     → critical
+//	public,  external PRs blocked  → low
+//	private, external PRs open     → high
+//	private, external PRs blocked, fork PRs run workflows → medium
+//	private, external PRs blocked, fork PRs cannot run    → low
+//
+// Only the one known-restricted policy value downgrades; an unknown or absent
+// policy keeps the severe reading so a new GitHub enum value can only
+// over-report, never under-report. The same bias applies when the private-repo
+// fork PR workflow policy could not be read: unknown grades as medium, not low.
+func dangerousTriggerBase(facts *ScanFacts) (string, string) {
+	private := facts.Repository.GetPrivate()
+	restricted := facts.Repository.GetPullRequestCreationPolicy() == prCreationPolicyCollaboratorsOnly
+	switch {
+	case !private && !restricted:
+		return SeverityCritical, "used"
+	case !private:
+		return SeverityLow, "public-restricted"
+	case !restricted:
+		return SeverityHigh, "private"
 	}
-	return facts.Repository.GetPullRequestCreationPolicy() == prCreationPolicyCollaboratorsOnly
+	forkPolicy := facts.ActionsSettings.PrivateForkPRWorkflows
+	switch {
+	case forkPolicy == nil:
+		return SeverityMedium, "private-fork-unknown"
+	case forkPolicy.GetRunWorkflowsFromForkPullRequests():
+		return SeverityMedium, "private-fork-workflows"
+	default:
+		return SeverityLow, "private-restricted"
+	}
+}
+
+// escalateSeverity raises a severity one level, capped at critical. Info is
+// left alone: it marks non-findings (successes, undetermined notes), which an
+// escalation modifier has no business touching.
+func escalateSeverity(severity string) string {
+	switch severity {
+	case SeverityLow:
+		return SeverityMedium
+	case SeverityMedium:
+		return SeverityHigh
+	case SeverityHigh:
+		return SeverityCritical
+	default:
+		return severity
+	}
 }
 
 func evaluateDangerousWorkflowRule(facts *ScanFacts) []Finding {
-	// The trigger is the same, but the blast radius is not: where external
-	// contributors cannot open PRs at all, there is no untrusted head for the
-	// workflow to check out today. Medium instead of critical — the mitigation
-	// is a repository setting, one click away from disappearing, so it never
-	// downgrades further than that.
-	severity, msgKey := SeverityCritical, "used"
-	if externalPRCreationRestricted(facts) {
-		severity, msgKey = SeverityMedium, "used-restricted"
-	}
+	severity, msgKey := dangerousTriggerBase(facts)
 
 	var findings []Finding
 	for _, wf := range facts.Workflows {
 		if !wf.Valid || !hasDangerousTrigger(wf.Workflow.On) {
 			continue
 		}
+		// actions/checkout v7 refuses to fetch fork PR code under
+		// pull_request_target by default, removing the classic pwn-request
+		// footgun. A checkout pinned to an older version tag forfeits that
+		// guardrail, so the finding climbs one level. Graded per workflow, not
+		// per repository: one workflow can carry the old checkout while
+		// another does not.
+		wfSeverity := severity
 		msg := ruleMessage(ruleNamePullRequestTarget, msgKey, nil)
+		if ref, outdated := outdatedCheckoutRef(wf.Workflow); outdated {
+			wfSeverity = escalateSeverity(severity)
+			note := ruleMessage(ruleNamePullRequestTarget, "old-checkout", map[string]string{"Ref": ref})
+			msg.Description += " " + note.Description
+		}
 		findings = append(findings, Finding{
 			ID:          fmt.Sprintf("dangerous-trigger-%s", wf.Path),
-			Severity:    severity,
+			Severity:    wfSeverity,
 			Title:       msg.Title,
 			Description: msg.Description,
 			File:        wf.Path,

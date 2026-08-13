@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/google/go-github/v90/github"
@@ -210,6 +211,51 @@ type ActionRef struct {
 	name    string
 	version string
 	line    int
+}
+
+// checkoutSafeMajor is the first actions/checkout major release that refuses
+// to fetch fork pull request code in pull_request_target and workflow_run
+// workflows by default (June 2026). Earlier version tags predate that
+// guardrail, so a pull_request_target workflow using one is graded a level
+// more severe.
+const checkoutSafeMajor = 7
+
+// versionTagMajorRegex extracts the major number from a version-tag-shaped ref
+// such as v4, 4, v4.1.1, or v4-beta. Refs that do not look like version tags
+// (branches, full SHAs) carry no version information and never match.
+var versionTagMajorRegex = regexp.MustCompile(`^v?(\d+)([.-].*)?$`)
+
+// outdatedCheckoutRef returns the first actions/checkout reference in the
+// workflow whose version tag predates the v7 fork-checkout protection, walking
+// jobs in sorted-name order so the answer is deterministic. Refs that are not
+// version tags — a full SHA, a branch — neither escalate nor clear: they carry
+// no version information, and treating "unknown" as "old" would punish the SHA
+// pinning every other rule asks for.
+func outdatedCheckoutRef(workflow *WorkflowFile) (string, bool) {
+	if workflow == nil {
+		return "", false
+	}
+	jobNames := make([]string, 0, len(workflow.Jobs))
+	for name := range workflow.Jobs {
+		jobNames = append(jobNames, name)
+	}
+	sort.Strings(jobNames)
+	for _, name := range jobNames {
+		for _, step := range workflow.Jobs[name].Steps {
+			action, ok := parseActionRef(step.Uses)
+			if !ok || !strings.EqualFold(action.name, "actions/checkout") {
+				continue
+			}
+			m := versionTagMajorRegex.FindStringSubmatch(action.version)
+			if m == nil {
+				continue
+			}
+			if major, err := strconv.Atoi(m[1]); err == nil && major < checkoutSafeMajor {
+				return action.version, true
+			}
+		}
+	}
+	return "", false
 }
 
 func findUnpinnedActionsInWorkflow(workflow *WorkflowFile, content string) []ActionRef {

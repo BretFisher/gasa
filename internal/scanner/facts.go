@@ -46,6 +46,15 @@ type ActionsSettingsFacts struct {
 	DefaultWorkflowPermissions *github.DefaultWorkflowPermissionRepository
 	ForkPRContributorApproval  *github.ContributorApprovalPermissions
 
+	// PrivateForkPRWorkflows holds the private-repository fork pull request
+	// workflow policy (whether fork PRs run workflows at all, and what they
+	// receive). Only collected for private repositories — GitHub answers the
+	// endpoint with 422 for public ones, where fork PR workflow behavior is
+	// governed by the fork-PR contributor approval policy instead. Nil when the
+	// repository is public, the scan is unauthenticated, or the read failed
+	// (see Undetermined).
+	PrivateForkPRWorkflows *github.WorkflowsPermissions
+
 	// ForkPRApprovalNotApplicable is set when GitHub reports that fork-PR
 	// approval does not exist for this repository at all. Private repositories
 	// answer the endpoint with 422 "Fork PR approval is not allowed for private
@@ -77,6 +86,7 @@ const (
 	settingWorkflowPermissions = "workflow permissions"
 	settingForkPRApproval      = "fork-PR contributor approval"
 	settingSHAPinning          = "SHA pinning requirement"
+	settingForkPRWorkflows     = "private-repo fork PR workflow policy"
 )
 
 // markUndetermined records that a setting could not be read, and why.
@@ -124,6 +134,12 @@ type factCollector struct {
 	client        *github.Client
 	authenticated bool
 
+	// repoPrivate mirrors Repository.private for the repo being scanned. Set
+	// once by collectFacts before the collector goroutines start (never written
+	// after), so the settings collector knows whether to read the private-only
+	// fork PR workflow endpoint without threading the flag through every call.
+	repoPrivate bool
+
 	warnMu   sync.Mutex
 	warnings []FactWarning
 }
@@ -140,6 +156,7 @@ func (c *factCollector) collectFacts(ctx context.Context, owner, repo string, re
 	if repository != nil && repository.DefaultBranch != nil && *repository.DefaultBranch != "" {
 		facts.DefaultBranch = *repository.DefaultBranch
 	}
+	c.repoPrivate = repository.GetPrivate()
 
 	// The four collectors hit independent GitHub endpoints, so run them
 	// concurrently. Each goroutine writes only its own local, read back after

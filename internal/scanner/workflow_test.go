@@ -396,35 +396,57 @@ func TestEvaluateWriteAllPermissionsRule(t *testing.T) {
 	})
 }
 
-// pull_request_target's blast radius depends on whether an external contributor
-// can open a PR at all. The severity must track that — and must fail severe
-// when the policy is unknown, so a new GitHub enum value can only over-report.
-func TestEvaluateDangerousWorkflowRule_SeverityTracksPRCreationPolicy(t *testing.T) {
-	prtWorkflow := func(t *testing.T) []WorkflowFact {
-		t.Helper()
-		content := "on: pull_request_target\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n"
-		workflow := &WorkflowFile{}
-		if err := yaml.Unmarshal([]byte(content), workflow); err != nil {
-			t.Fatalf("yaml.Unmarshal() error: %v", err)
+// prtWorkflowFacts builds a single valid pull_request_target workflow whose
+// only step is the given uses/run line, for exercising the dangerous-trigger
+// severity grading.
+func prtWorkflowFacts(t *testing.T, step string) []WorkflowFact {
+	t.Helper()
+	content := "on: pull_request_target\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - " + step + "\n"
+	workflow := &WorkflowFile{}
+	if err := yaml.Unmarshal([]byte(content), workflow); err != nil {
+		t.Fatalf("yaml.Unmarshal() error: %v", err)
+	}
+	return []WorkflowFact{{Path: ".github/workflows/prt.yml", Content: content, Workflow: workflow, Valid: true}}
+}
+
+// pull_request_target's blast radius depends on who can actually reach it with
+// an untrusted PR: repo visibility, the PR creation policy, and (for private
+// repos) whether fork PRs run workflows at all. Unknown values must grade
+// severe so a new GitHub enum value — or an unreadable setting — can only
+// over-report, never under-report.
+func TestEvaluateDangerousWorkflowRule_SeverityMatrix(t *testing.T) {
+	repo := func(private bool, policy string) *github.Repository {
+		r := &github.Repository{Private: github.Ptr(private)}
+		if policy != "" {
+			r.PullRequestCreationPolicy = github.Ptr(policy)
 		}
-		return []WorkflowFact{{Path: ".github/workflows/prt.yml", Content: content, Workflow: workflow, Valid: true}}
+		return r
+	}
+	forkRun := func(run bool) ActionsSettingsFacts {
+		return ActionsSettingsFacts{PrivateForkPRWorkflows: &github.WorkflowsPermissions{
+			RunWorkflowsFromForkPullRequests: github.Ptr(run),
+		}}
 	}
 
 	cases := []struct {
 		name         string
 		facts        *ScanFacts
 		wantSeverity string
-		wantRestrict bool
+		wantTitle    string
 	}{
-		{"public, policy all", &ScanFacts{Repository: &github.Repository{Private: github.Ptr(false), PullRequestCreationPolicy: github.Ptr("all")}}, SeverityCritical, false},
-		{"public, policy unknown stays critical", &ScanFacts{Repository: &github.Repository{}}, SeverityCritical, false},
-		{"public, collaborators only", &ScanFacts{Repository: &github.Repository{Private: github.Ptr(false), PullRequestCreationPolicy: github.Ptr("collaborators_only")}}, SeverityMedium, true},
-		{"private repository", &ScanFacts{Repository: &github.Repository{Private: github.Ptr(true), PullRequestCreationPolicy: github.Ptr("all")}}, SeverityMedium, true},
+		{"public, policy all", &ScanFacts{Repository: repo(false, "all")}, SeverityCritical, "pull_request_target event is used"},
+		{"public, policy unknown stays critical", &ScanFacts{Repository: &github.Repository{}}, SeverityCritical, "pull_request_target event is used"},
+		{"public, collaborators only", &ScanFacts{Repository: repo(false, "collaborators_only")}, SeverityLow, "external PRs are blocked"},
+		{"private, policy all", &ScanFacts{Repository: repo(true, "all"), ActionsSettings: forkRun(false)}, SeverityHigh, "external PRs allowed"},
+		{"private, policy unknown stays high", &ScanFacts{Repository: repo(true, "")}, SeverityHigh, "external PRs allowed"},
+		{"private, blocked, fork PR workflows enabled", &ScanFacts{Repository: repo(true, "collaborators_only"), ActionsSettings: forkRun(true)}, SeverityMedium, "runs fork PR workflows"},
+		{"private, blocked, fork PR workflows disabled", &ScanFacts{Repository: repo(true, "collaborators_only"), ActionsSettings: forkRun(false)}, SeverityLow, "fork PR workflows off"},
+		{"private, blocked, fork policy unreadable grades as enabled", &ScanFacts{Repository: repo(true, "collaborators_only")}, SeverityMedium, "unverified"},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			tc.facts.Workflows = prtWorkflow(t)
+			tc.facts.Workflows = prtWorkflowFacts(t, "run: echo hi")
 			findings := evaluateDangerousWorkflowRule(tc.facts)
 			if len(findings) != 1 {
 				t.Fatalf("findings = %+v, want one", findings)
@@ -432,9 +454,76 @@ func TestEvaluateDangerousWorkflowRule_SeverityTracksPRCreationPolicy(t *testing
 			if findings[0].Severity != tc.wantSeverity {
 				t.Fatalf("severity = %q, want %q", findings[0].Severity, tc.wantSeverity)
 			}
-			restricted := strings.Contains(findings[0].Title, "restricted")
-			if restricted != tc.wantRestrict {
-				t.Fatalf("title = %q, restricted-variant = %v, want %v", findings[0].Title, restricted, tc.wantRestrict)
+			if !strings.Contains(findings[0].Title, tc.wantTitle) {
+				t.Fatalf("title = %q, want it to contain %q", findings[0].Title, tc.wantTitle)
+			}
+		})
+	}
+}
+
+// A checkout older than v7 predates the fork-checkout protection, so whatever
+// the matrix graded climbs one level — and critical stays critical.
+func TestEvaluateDangerousWorkflowRule_OldCheckoutEscalates(t *testing.T) {
+	cases := []struct {
+		name         string
+		private      bool
+		policy       string
+		step         string
+		wantSeverity string
+		wantNote     bool
+	}{
+		{"low escalates to medium", false, "collaborators_only", "uses: actions/checkout@v4", SeverityMedium, true},
+		{"critical stays critical", false, "all", "uses: actions/checkout@v4", SeverityCritical, true},
+		{"checkout v7 does not escalate", false, "collaborators_only", "uses: actions/checkout@v7", SeverityLow, false},
+		{"SHA-pinned checkout carries no version info", false, "collaborators_only", "uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0", SeverityLow, false},
+		{"other actions are not checkout", false, "collaborators_only", "uses: actions/setup-go@v5", SeverityLow, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			facts := &ScanFacts{Repository: &github.Repository{
+				Private:                   github.Ptr(tc.private),
+				PullRequestCreationPolicy: github.Ptr(tc.policy),
+			}}
+			facts.Workflows = prtWorkflowFacts(t, tc.step)
+			findings := evaluateDangerousWorkflowRule(facts)
+			if len(findings) != 1 {
+				t.Fatalf("findings = %+v, want one", findings)
+			}
+			if findings[0].Severity != tc.wantSeverity {
+				t.Fatalf("severity = %q, want %q", findings[0].Severity, tc.wantSeverity)
+			}
+			hasNote := strings.Contains(findings[0].Description, "raised one level")
+			if hasNote != tc.wantNote {
+				t.Fatalf("description = %q, escalation note = %v, want %v", findings[0].Description, hasNote, tc.wantNote)
+			}
+		})
+	}
+}
+
+func TestOutdatedCheckoutRef(t *testing.T) {
+	cases := []struct {
+		uses string
+		want bool
+	}{
+		{"actions/checkout@v4", true},
+		{"actions/checkout@4", true},
+		{"actions/checkout@v6.1.2", true},
+		{"actions/checkout@v6-beta", true},
+		{"actions/checkout@v7", false},
+		{"actions/checkout@v7.0.0", false},
+		{"actions/checkout@v12", false},
+		{"actions/checkout@main", false},
+		{"actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0", false},
+		{"someone/checkout@v4", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.uses, func(t *testing.T) {
+			wf := &WorkflowFile{Jobs: map[string]WorkflowJob{
+				"build": {Steps: []WorkflowStep{{Uses: tc.uses}}},
+			}}
+			if _, got := outdatedCheckoutRef(wf); got != tc.want {
+				t.Fatalf("outdatedCheckoutRef(%q) = %v, want %v", tc.uses, got, tc.want)
 			}
 		})
 	}
