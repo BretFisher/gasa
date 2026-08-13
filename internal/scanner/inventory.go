@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/google/go-github/v84/github"
+	"github.com/google/go-github/v90/github"
 )
 
 // fileInventory records which files exist at the repository root and inside the

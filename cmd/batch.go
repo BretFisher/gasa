@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/bretfisher/gasa/internal/scanner"
-	"github.com/google/go-github/v84/github"
+	"github.com/google/go-github/v90/github"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 )

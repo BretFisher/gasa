@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/go-github/v84/github"
+	"github.com/google/go-github/v90/github"
 	"gopkg.in/yaml.v3"
 )
 
@@ -126,7 +126,7 @@ func newClient(ctx context.Context) (*github.Client, error) {
 	if token == "" {
 		return nil, errors.New("no GitHub token found: set GITHUB_TOKEN, GH_TOKEN, or sign in with `gh auth login`")
 	}
-	return github.NewClient(nil).WithAuthToken(token), nil
+	return github.NewClient(github.WithAuthToken(token))
 }
 
 type fixture struct {

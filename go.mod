@@ -6,7 +6,7 @@ require (
 	charm.land/lipgloss/v2 v2.0.5
 	github.com/charmbracelet/colorprofile v0.4.3
 	github.com/charmbracelet/x/term v0.2.2
-	github.com/google/go-github/v84 v84.0.0
+	github.com/google/go-github/v90 v90.0.0
 	github.com/spf13/cobra v1.10.2
 	github.com/tailscale/hujson v0.0.0-20260302212456-ecc657c15afd
 	golang.org/x/sync v0.22.0

@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/google/go-github/v84/github"
+	"github.com/google/go-github/v90/github"
 )
 
 // addWarning records an indeterminate fact (see FactWarning). It is safe for

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/google/go-github/v84/github"
+	"github.com/google/go-github/v90/github"
 )
 
 func TestParseRepoURL(t *testing.T) {

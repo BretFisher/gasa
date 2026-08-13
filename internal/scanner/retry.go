@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/go-github/v84/github"
+	"github.com/google/go-github/v90/github"
 )
 
 const (
@@ -35,8 +35,23 @@ type retryTransport struct {
 	sem chan struct{}
 }
 
-func newGitHubClient() *github.Client {
-	return github.NewClient(&http.Client{Transport: newRetryTransport(http.DefaultTransport)})
+// newGitHubClient builds the shared client: our retrying, concurrency-bounded
+// transport plus any extra options (an auth token, in practice).
+//
+// go-github v90 moved to functional options and NewClient now returns an
+// error. Every failure mode is a programmer error at this call site — a nil
+// HTTP client or an empty auth token, both of which the callers below make
+// impossible — so this panics rather than threading an error through New and
+// NewWithToken signatures that the CLI relies on.
+func newGitHubClient(extra ...github.ClientOptionsFunc) *github.Client {
+	opts := append([]github.ClientOptionsFunc{
+		github.WithHTTPClient(&http.Client{Transport: newRetryTransport(http.DefaultTransport)}),
+	}, extra...)
+	client, err := github.NewClient(opts...)
+	if err != nil {
+		panic("constructing GitHub client: " + err.Error())
+	}
+	return client
 }
 
 func newRetryTransport(base http.RoundTripper) *retryTransport {

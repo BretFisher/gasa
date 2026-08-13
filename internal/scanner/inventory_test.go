@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/google/go-github/v84/github"
+	"github.com/google/go-github/v90/github"
 )
 
 // countingMux records every request path so tests can assert not just what the

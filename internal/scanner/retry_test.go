@@ -6,13 +6,12 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/google/go-github/v84/github"
+	"github.com/google/go-github/v90/github"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -263,12 +262,14 @@ func TestRetryTransportReleasesSlotOnErrorResponse(t *testing.T) {
 		sleep:       sleepWithContext,
 		sem:         make(chan struct{}, 2),
 	}
-	client := github.NewClient(&http.Client{Transport: transport})
-	base, err := url.Parse(srv.URL + "/")
+	base := srv.URL + "/"
+	client, err := github.NewClient(
+		github.WithHTTPClient(&http.Client{Transport: transport}),
+		github.WithURLs(&base, nil),
+	)
 	if err != nil {
-		t.Fatalf("url.Parse() error = %v", err)
+		t.Fatalf("github.NewClient() error = %v", err)
 	}
-	client.BaseURL = base
 
 	// More requests than the slot cap. A per-call deadline turns a regression
 	// into a deterministic, fast failure rather than a hung test.
