@@ -614,7 +614,7 @@ func externalPRCreationRestricted(facts *ScanFacts) bool {
 	if facts.Repository.GetPrivate() {
 		return true
 	}
-	return facts.PullRequestCreationPolicy == prCreationPolicyCollaboratorsOnly
+	return facts.Repository.GetPullRequestCreationPolicy() == prCreationPolicyCollaboratorsOnly
 }
 
 func evaluateDangerousWorkflowRule(facts *ScanFacts) []Finding {

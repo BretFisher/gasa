@@ -128,31 +128,6 @@ func (s *Scanner) GitHubClient() *github.Client {
 	return s.client
 }
 
-// repositoryWithPolicy captures pull_request_creation_policy, which go-github
-// v84 does not model on Repository. The embedded struct keeps every field the
-// rest of the scanner reads; JSON unmarshalling promotes into it, and
-// Repository has no custom UnmarshalJSON to hijack that.
-type repositoryWithPolicy struct {
-	github.Repository
-	PullRequestCreationPolicy string `json:"pull_request_creation_policy"`
-}
-
-// fetchRepository performs the same GET /repos/{owner}/{repo} the scan always
-// made, decoding one extra field. One request, not two: duplicating the call
-// just to read a single field would spend exactly the budget the file
-// inventory work exists to save.
-func fetchRepository(ctx context.Context, client *github.Client, owner, repo string) (*github.Repository, string, error) {
-	req, err := client.NewRequest(ctx, "GET", fmt.Sprintf("repos/%v/%v", owner, repo), nil)
-	if err != nil {
-		return nil, "", err
-	}
-	var wrapped repositoryWithPolicy
-	if _, err := client.Do(req, &wrapped); err != nil {
-		return nil, "", err
-	}
-	return &wrapped.Repository, wrapped.PullRequestCreationPolicy, nil
-}
-
 // ScanRepo performs all security checks on a repository.
 func (s *Scanner) ScanRepo(ctx context.Context, owner, repo string) (*ScanResult, error) {
 	return s.ScanRepoWithOptions(ctx, owner, repo, ScanOptions{})
@@ -173,7 +148,7 @@ func (s *Scanner) ScanRepoWithOptions(ctx context.Context, owner, repo string, o
 	if dbg != nil {
 		dbg(repoFull, "GET /repos/"+repoFull)
 	}
-	repository, prCreationPolicy, err := fetchRepository(ctx, s.client, owner, repo)
+	repository, _, err := s.client.Repositories.Get(ctx, owner, repo)
 	if err != nil {
 		result.Error = classifyGitHubRepoAccessError(err)
 		if dbg != nil {
@@ -186,7 +161,7 @@ func (s *Scanner) ScanRepoWithOptions(ctx context.Context, owner, repo string, o
 	}
 
 	collector := &factCollector{client: s.client, authenticated: s.authenticated}
-	facts := collector.collectFacts(ctx, owner, repo, repository, prCreationPolicy, opts.Config, dbg)
+	facts := collector.collectFacts(ctx, owner, repo, repository, opts.Config, dbg)
 
 	// Surface any checks that could not be completed so a partial scan is never
 	// mistaken for a clean one.
