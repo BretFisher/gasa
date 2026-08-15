@@ -378,6 +378,7 @@ The scanner runs the following checks against each repository. Findings are rate
 | [Allowed Actions Policy](docs/rules/allowed-actions-policy.md) | Settings | Medium | Repository allows all actions to run instead of restricting to trusted sources |
 | [Actions Can Approve PRs](docs/rules/actions-can-approve-prs.md) | Settings | Medium | Workflows can create and approve pull request reviews, bypassing required reviews |
 | [Fork PR Workflow Approval](docs/rules/fork-pr-workflow-approval.md) | Settings | High | External contributors can trigger fork PR workflows without maintainer approval |
+| [SHA Pinning Required](docs/rules/sha-pinning-required.md) | Settings | Medium | Repository does not enforce full-length commit SHA pinning for actions |
 | [Update Tool Configuration](docs/rules/update-tool-configuration.md) | Updates | Medium | No Dependabot or Renovate config, invalid config, or missing `github-actions` coverage |
 | [Update Tool GitHub Actions Cooldown](docs/rules/update-tool-actions-cooldown.md) | Updates | Low | Neither Dependabot nor Renovate sets a cooldown delay for `github-actions` updates |
 | [Update Tool GitHub Actions Pinning](docs/rules/update-tool-actions-pinning.md) | Updates | Medium | No update tool will keep action commit SHAs current — Renovate without digest pinning and no Dependabot `github-actions` entry |

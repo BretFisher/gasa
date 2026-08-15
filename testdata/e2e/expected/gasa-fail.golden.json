@@ -15,6 +15,12 @@
       "success": false
     },
     {
+      "rule": "actions/permissions/sha-pinning-required",
+      "id": "settings-sha-pinning-not-required",
+      "severity": "medium",
+      "success": false
+    },
+    {
       "rule": "actions/permissions/workflow/actions-can-approve-prs",
       "id": "settings-actions-can-approve-prs",
       "severity": "medium",

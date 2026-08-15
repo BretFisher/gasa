@@ -61,6 +61,7 @@ type Manifest struct {
 type Actions struct {
 	Enabled                      *bool  `yaml:"enabled"`
 	AllowedActions               string `yaml:"allowed_actions"`
+	SHAPinningRequired           *bool  `yaml:"sha_pinning_required"`
 	DefaultWorkflowPermissions   string `yaml:"default_workflow_permissions"`
 	CanApprovePullRequestReviews *bool  `yaml:"can_approve_pull_request_reviews"`
 	ForkPRContributorApproval    string `yaml:"fork_pr_contributor_approval"`
@@ -270,6 +271,7 @@ func remoteActions(ctx context.Context, client *github.Client, f fixture) (Actio
 	}
 	got.Enabled = perms.Enabled
 	got.AllowedActions = perms.GetAllowedActions()
+	got.SHAPinningRequired = perms.SHAPinningRequired
 
 	workflow, _, err := client.Repositories.GetDefaultWorkflowPermissions(ctx, owner, name)
 	if err != nil {

@@ -349,6 +349,7 @@ func TestCollectActionsSettings_TransientErrorIsNotReportedAsDisabled(t *testing
 		{"default-workflow-permissions", evaluateDefaultWorkflowPermissionsRule, ruleNameDefaultWorkflowPermissions},
 		{"actions-can-approve-prs", evaluateActionsCanApprovePRsRule, ruleNameActionsCanApprovePRs},
 		{"fork-pr-approval", evaluateForkPRContributorApprovalRule, ruleNameForkPRContributorApproval},
+		{"sha-pinning-required", evaluateSHAPinningRequiredRule, ruleNameSHAPinningRequired},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			findings := tc.run(facts)
@@ -546,4 +547,61 @@ func TestApplyRuleConfig_PreservesDeliberateFindingSeverity(t *testing.T) {
 	if got[0].Severity != SeverityLow {
 		t.Fatalf("severity = %q, want the config override to win", got[0].Severity)
 	}
+}
+
+// The SHA-pinning setting rides in the same /actions/permissions response the
+// allowed-actions rule reads, so this rule costs no additional API call — and
+// it has to handle every state that response can be in.
+func TestEvaluateSHAPinningRequiredRule(t *testing.T) {
+	collect := func(t *testing.T, payload map[string]any) *ScanFacts {
+		t.Helper()
+		s, mux := newTestScanner(t, true)
+		handleJSON(mux, "/repos/owner/repo/actions/permissions", payload)
+		handleJSON(mux, "/repos/owner/repo/actions/permissions/workflow", map[string]any{"default_workflow_permissions": "read", "can_approve_pull_request_reviews": false})
+		handleJSON(mux, "/repos/owner/repo/actions/permissions/fork-pr-contributor-approval", map[string]any{"approval_policy": "all_external_contributors"})
+		return &ScanFacts{ActionsSettings: newTestFactCollector(s).collectActionsSettingsFacts(context.Background(), "owner", "repo", nil)}
+	}
+
+	t.Run("not required is a medium finding", func(t *testing.T) {
+		facts := collect(t, map[string]any{"enabled": true, "allowed_actions": "selected", "sha_pinning_required": false})
+		findings := evaluateSHAPinningRequiredRule(facts)
+		if len(findings) != 1 || findings[0].ID != findingIDSHAPinningNotRequired {
+			t.Fatalf("findings = %+v, want one not-required finding", findings)
+		}
+		if findings[0].Severity != SeverityMedium {
+			t.Fatalf("severity = %q, want medium", findings[0].Severity)
+		}
+	})
+
+	t.Run("required passes", func(t *testing.T) {
+		facts := collect(t, map[string]any{"enabled": true, "allowed_actions": "selected", "sha_pinning_required": true})
+		if findings := evaluateSHAPinningRequiredRule(facts); len(findings) != 0 {
+			t.Fatalf("findings = %+v, want none", findings)
+		}
+		if shaPinningRequiredSuccessFinding(ruleNameSHAPinningRequired, SeverityMedium, facts) == nil {
+			t.Fatal("expected a success finding when enforcement is on")
+		}
+	})
+
+	t.Run("absent value is undetermined, not clean", func(t *testing.T) {
+		facts := collect(t, map[string]any{"enabled": true, "allowed_actions": "selected"})
+		findings := evaluateSHAPinningRequiredRule(facts)
+		if len(findings) != 1 || findings[0].Severity != SeverityInfo || findings[0].Success {
+			t.Fatalf("findings = %+v, want one info undetermined finding", findings)
+		}
+		if shaPinningRequiredSuccessFinding(ruleNameSHAPinningRequired, SeverityMedium, facts) != nil {
+			t.Fatal("an unread setting must never be reported as a success")
+		}
+	})
+
+	t.Run("actions observed disabled passes with its own message", func(t *testing.T) {
+		facts := collect(t, map[string]any{"enabled": false})
+		if findings := evaluateSHAPinningRequiredRule(facts); len(findings) != 0 {
+			t.Fatalf("findings = %+v, want none", findings)
+		}
+		success := shaPinningRequiredSuccessFinding(ruleNameSHAPinningRequired, SeverityMedium, facts)
+		if success == nil || !strings.Contains(success.Title, "Actions are disabled") {
+			t.Fatalf("success = %+v, want the disabled pass", success)
+		}
+	})
 }

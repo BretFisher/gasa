@@ -59,15 +59,7 @@ func (c *factCollector) collectActionsSettingsFacts(ctx context.Context, owner, 
 	}
 
 	facts.Permissions = permissions
-	// Actions is enabled but GitHub did not report a policy value. Observed when
-	// an org or enterprise policy governs the repository. Without this the rule
-	// would emit neither a finding nor a success and vanish from the report.
-	if permissions.AllowedActions == nil && (permissions.Enabled == nil || *permissions.Enabled) {
-		facts.markUndetermined(settingAllowedActions, "GitHub did not report an allowed-actions value for this repository")
-		if dbg != nil {
-			dbg(repoFull, "actions/permissions: allowed_actions absent — undetermined")
-		}
-	}
+	markAbsentPermissionFields(&facts, permissions, repoFull, dbg)
 	if permissions.Enabled != nil && !*permissions.Enabled {
 		if dbg != nil {
 			dbg(repoFull, "actions disabled for this repo — skipping workflow/fork-pr settings")
@@ -82,6 +74,30 @@ func (c *factCollector) collectActionsSettingsFacts(ctx context.Context, owner, 
 	}
 
 	return facts
+}
+
+// markAbsentPermissionFields records fields the /actions/permissions response
+// should carry but did not — observed when an org or enterprise policy governs
+// the repository (allowed_actions) or on an older GitHub Enterprise Server
+// (sha_pinning_required). Without this the rules reading those fields would
+// emit neither a finding nor a success and vanish from the report; an absent
+// value is unknown, not clean.
+func markAbsentPermissionFields(facts *ActionsSettingsFacts, permissions *github.ActionsPermissionsRepository, repoFull string, dbg DebugLogger) {
+	if permissions.Enabled != nil && !*permissions.Enabled {
+		return
+	}
+	if permissions.AllowedActions == nil {
+		facts.markUndetermined(settingAllowedActions, "GitHub did not report an allowed-actions value for this repository")
+		if dbg != nil {
+			dbg(repoFull, "actions/permissions: allowed_actions absent — undetermined")
+		}
+	}
+	if permissions.SHAPinningRequired == nil {
+		facts.markUndetermined(settingSHAPinning, "GitHub did not report a sha_pinning_required value for this repository")
+		if dbg != nil {
+			dbg(repoFull, "actions/permissions: sha_pinning_required absent — undetermined")
+		}
+	}
 }
 
 // recordSettingsFetchFailure classifies a failed top-level Actions settings
@@ -108,7 +124,7 @@ func (c *factCollector) recordSettingsFetchFailure(facts *ActionsSettingsFacts, 
 		// claim about a setting the scanner never managed to read.
 		cause := describeFetchError(err)
 		c.addWarning("actions settings", cause)
-		for _, setting := range []string{settingAllowedActions, settingWorkflowPermissions, settingForkPRApproval} {
+		for _, setting := range []string{settingAllowedActions, settingWorkflowPermissions, settingForkPRApproval, settingSHAPinning} {
 			facts.markUndetermined(setting, cause)
 		}
 	}

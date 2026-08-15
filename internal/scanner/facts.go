@@ -76,6 +76,7 @@ const (
 	settingAllowedActions      = "allowed-actions policy"
 	settingWorkflowPermissions = "workflow permissions"
 	settingForkPRApproval      = "fork-PR contributor approval"
+	settingSHAPinning          = "SHA pinning requirement"
 )
 
 // markUndetermined records that a setting could not be read, and why.
