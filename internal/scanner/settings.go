@@ -124,7 +124,11 @@ func (c *factCollector) recordSettingsFetchFailure(facts *ActionsSettingsFacts, 
 		// claim about a setting the scanner never managed to read.
 		cause := describeFetchError(err)
 		c.addWarning("actions settings", cause)
-		for _, setting := range []string{settingAllowedActions, settingWorkflowPermissions, settingForkPRApproval, settingSHAPinning} {
+		settings := []string{settingAllowedActions, settingWorkflowPermissions, settingForkPRApproval, settingSHAPinning}
+		if c.repoPrivate {
+			settings = append(settings, settingForkPRWorkflows)
+		}
+		for _, setting := range settings {
 			facts.markUndetermined(setting, cause)
 		}
 	}
@@ -199,6 +203,17 @@ func fetchAuthenticatedActionsSettings(ctx context.Context, c *factCollector, ow
 		}
 	}
 
+	fetchForkPRApprovalPolicy(ctx, c, owner, repo, facts, repoFull, dbg)
+
+	if c.repoPrivate {
+		fetchPrivateForkPRWorkflowSettings(ctx, c, owner, repo, facts, repoFull, dbg)
+	}
+}
+
+// fetchForkPRApprovalPolicy reads the fork-PR contributor approval policy,
+// treating GitHub's 422 "not allowed for private repositories" as a determinate
+// not-applicable answer rather than a failed read.
+func fetchForkPRApprovalPolicy(ctx context.Context, c *factCollector, owner, repo string, facts *ActionsSettingsFacts, repoFull string, dbg DebugLogger) {
 	if dbg != nil {
 		dbg(repoFull, "GET /repos/"+repoFull+"/actions/permissions/fork-pr-contributor-approval")
 	}
@@ -224,6 +239,48 @@ func fetchAuthenticatedActionsSettings(ctx context.Context, c *factCollector, ow
 		c.addWarning("fork-PR contributor approval", describeFetchError(err))
 		if dbg != nil {
 			dbg(repoFull, "fork-pr-approval fetch could not be determined: "+describeFetchError(err))
+		}
+	}
+}
+
+// fetchPrivateForkPRWorkflowSettings reads the private-repository fork pull
+// request workflow policy: whether fork PRs run workflows at all, and what
+// those runs receive (write tokens, secrets, approval gates). The
+// pull-request-target rule uses it to grade how exposed a private repository
+// actually is. Only called for private repositories — GitHub rejects the
+// endpoint with 422 for public ones, where the fork-PR contributor approval
+// policy governs instead.
+func fetchPrivateForkPRWorkflowSettings(ctx context.Context, c *factCollector, owner, repo string, facts *ActionsSettingsFacts, repoFull string, dbg DebugLogger) {
+	if dbg != nil {
+		dbg(repoFull, "GET /repos/"+repoFull+"/actions/permissions/fork-pr-workflows-private-repos")
+	}
+	perms, resp, err := c.client.Repositories.GetPrivateRepoForkPRWorkflowSettings(ctx, owner, repo)
+	switch {
+	case err == nil:
+		facts.PrivateForkPRWorkflows = perms
+		if dbg != nil {
+			dbg(repoFull, fmt.Sprintf("fork-pr-workflows: run=%v write_tokens=%v secrets=%v require_approval=%v",
+				perms.GetRunWorkflowsFromForkPullRequests(), perms.GetSendWriteTokensToWorkflows(),
+				perms.GetSendSecretsAndVariables(), perms.GetRequireApprovalForForkPRWorkflows()))
+		}
+	case resp != nil && resp.Response != nil && resp.StatusCode == http.StatusUnprocessableEntity:
+		// "Fork PR workflow settings is not allowed for public repositories."
+		// Only private repositories are queried, so this should not happen —
+		// but it is a determinate answer that the setting does not exist here,
+		// not a failed read, so it must not be reported as undetermined.
+		if dbg != nil {
+			dbg(repoFull, "fork-pr-workflows: not applicable to this repository (HTTP 422)")
+		}
+	case isAccessDenied(resp):
+		facts.markUndetermined(settingForkPRWorkflows, fmt.Sprintf("GitHub returned %d — the token cannot read this setting", resp.StatusCode))
+		if dbg != nil {
+			dbg(repoFull, fmt.Sprintf("fork-pr-workflows fetch: status %d — undetermined", resp.StatusCode))
+		}
+	default:
+		facts.markUndetermined(settingForkPRWorkflows, describeFetchError(err))
+		c.addWarning("private-repo fork PR workflows", describeFetchError(err))
+		if dbg != nil {
+			dbg(repoFull, "fork-pr-workflows fetch could not be determined: "+describeFetchError(err))
 		}
 	}
 }

@@ -1429,13 +1429,28 @@ Candidates, in rough order of value:
 3. ~~**`pull_request_creation_policy` (from R16).**~~ **Done 2026-08-12** as severity modulation
    inside the `pull-request-target` rule — the design PLAN preferred but deferred over rule-coupling
    concerns. It is not rule coupling: the policy is a *fact* (read from the same `GET /repos` response
-   the scan always made, decoded via a wrapper struct because go-github v84 does not model the field),
-   and rules consuming facts is exactly what the fact model is for. The finding stays critical by
-   default and drops to medium — never lower — when the repository is private or its policy is
-   `collaborators_only`, the one value proven to block external PR creation. Unknown or new policy
-   values keep the critical reading, so GitHub adding an enum value can only over-report. `gasa-fail`
-   is exactly this case (public + `collaborators_only`), so its golden finding moves critical → medium,
-   which is more accurate: that mitigation is real and the audit verified it live
+   the scan always made; go-github v90 models the field natively, retiring the interim wrapper
+   struct), and rules consuming facts is exactly what the fact model is for.
+
+   **Refined 2026-08-12 into a full severity matrix** replacing the original critical/medium split.
+   Base severity now grades who can actually reach the trigger: public + external PRs open →
+   critical; public + `collaborators_only` → low; private + external PRs open → high; private +
+   blocked + "Run workflows from fork pull requests" enabled → medium; private + blocked + fork PR
+   workflows off (the default) → low. The private cells read a new fact,
+   `GET /repos/{owner}/{repo}/actions/permissions/fork-pr-workflows-private-repos` (private-only —
+   public repos answer 422), following the established undetermined taxonomy: an unreadable policy
+   grades as if fork PR workflows were enabled, and unknown `pull_request_creation_policy` values
+   keep the severe reading, so GitHub enum additions can only over-report. On top of the matrix,
+   any `actions/checkout` version tag below v7 in the flagged workflow escalates the result one
+   level (capped at critical): checkout v7 (June 2026) refuses to fetch fork PR code under
+   `pull_request_target` unless the step opts out via `allow-unsafe-pr-checkout`, so predating it
+   forfeits that guardrail. SHA and branch checkout refs neither escalate nor clear — they carry no
+   version information, and punishing SHA pins would contradict the pinning rule. `gasa-fail`
+   (public + `collaborators_only`, checkout `@v7`) moves medium → low in its golden; the private
+   matrix cells are covered by unit tests because `gasa-fail-private`'s workflow is deliberately
+   clean. Possible follow-ups, deliberately not done yet: escalate on `allow-unsafe-pr-checkout`
+   usage, and a standalone rule for the other private fork-PR toggles (send write tokens / send
+   secrets to fork PR workflows)
 
 Implementation requirements for any of these:
 

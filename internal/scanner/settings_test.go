@@ -451,6 +451,76 @@ func TestFetchAuthenticatedSettings_TransientErrorsWarn(t *testing.T) {
 	}
 }
 
+// The private-repo fork PR workflow endpoint is only read when the repository
+// is private, and its three failure shapes follow the taxonomy of the other
+// sub-calls: success stores the policy, a denial marks it undetermined without
+// warning, a transient error marks it undetermined and warns.
+func TestFetchPrivateForkPRWorkflowSettings(t *testing.T) {
+	const path = "/repos/owner/repo/actions/permissions/fork-pr-workflows-private-repos"
+	base := func(mux *http.ServeMux) {
+		handleJSON(mux, "/repos/owner/repo/actions/permissions", map[string]any{"enabled": true, "allowed_actions": "selected"})
+		handle404(mux,
+			"/repos/owner/repo/actions/permissions/workflow",
+			"/repos/owner/repo/actions/permissions/fork-pr-contributor-approval",
+		)
+	}
+
+	t.Run("public repos are never queried", func(t *testing.T) {
+		s, mux := newTestScanner(t, true)
+		base(mux)
+		mux.HandleFunc(path, func(http.ResponseWriter, *http.Request) {
+			t.Error("fork-pr-workflows endpoint must not be called for a public repo")
+		})
+		collector := newTestFactCollector(s)
+		facts := collector.collectActionsSettingsFacts(context.Background(), "owner", "repo", nil)
+		if _, undetermined := facts.undeterminedCause(settingForkPRWorkflows); undetermined {
+			t.Fatal("public repo must not mark the fork PR workflow policy undetermined")
+		}
+	})
+
+	t.Run("private repo stores the policy", func(t *testing.T) {
+		s, mux := newTestScanner(t, true)
+		base(mux)
+		handleJSON(mux, path, map[string]any{"run_workflows_from_fork_pull_requests": true})
+		collector := newTestFactCollector(s)
+		collector.repoPrivate = true
+		facts := collector.collectActionsSettingsFacts(context.Background(), "owner", "repo", nil)
+		if !facts.PrivateForkPRWorkflows.GetRunWorkflowsFromForkPullRequests() {
+			t.Fatalf("PrivateForkPRWorkflows = %+v, want run_workflows true", facts.PrivateForkPRWorkflows)
+		}
+	})
+
+	t.Run("denial marks undetermined without warning", func(t *testing.T) {
+		s, mux := newTestScanner(t, true)
+		base(mux)
+		handle404(mux, path)
+		collector := newTestFactCollector(s)
+		collector.repoPrivate = true
+		facts := collector.collectActionsSettingsFacts(context.Background(), "owner", "repo", nil)
+		if _, undetermined := facts.undeterminedCause(settingForkPRWorkflows); !undetermined {
+			t.Fatal("a denied read must mark the fork PR workflow policy undetermined")
+		}
+		if len(collector.warnings) != 0 {
+			t.Fatalf("a denial must not warn, got %+v", collector.warnings)
+		}
+	})
+
+	t.Run("transient error marks undetermined and warns", func(t *testing.T) {
+		s, mux := newTestScanner(t, true)
+		base(mux)
+		handle500(mux, path)
+		collector := newTestFactCollector(s)
+		collector.repoPrivate = true
+		facts := collector.collectActionsSettingsFacts(context.Background(), "owner", "repo", nil)
+		if _, undetermined := facts.undeterminedCause(settingForkPRWorkflows); !undetermined {
+			t.Fatal("a transient failure must mark the fork PR workflow policy undetermined")
+		}
+		if len(collector.warnings) != 1 || collector.warnings[0].Area != "private-repo fork PR workflows" {
+			t.Fatalf("warnings = %+v, want one for the fork PR workflow read", collector.warnings)
+		}
+	})
+}
+
 // A 403/404 on the sub-calls leaves the values unset and raises no incomplete
 // warning — the denial is determinate as an HTTP outcome, so it is not a
 // transient failure. The rules still surface it as an undetermined finding
