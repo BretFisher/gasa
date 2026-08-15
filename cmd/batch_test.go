@@ -5,12 +5,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/google/go-github/v84/github"
+	"github.com/google/go-github/v90/github"
 )
 
 func TestBuildBatchRequest(t *testing.T) {
@@ -200,11 +199,13 @@ func newTestGitHubClient(t *testing.T, handler http.Handler) *github.Client {
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
-	client := github.NewClient(server.Client())
-	baseURL, err := url.Parse(server.URL + "/")
+	base := server.URL + "/"
+	client, err := github.NewClient(
+		github.WithHTTPClient(server.Client()),
+		github.WithURLs(&base, nil),
+	)
 	if err != nil {
-		t.Fatalf("url.Parse() error = %v", err)
+		t.Fatalf("github.NewClient() error = %v", err)
 	}
-	client.BaseURL = baseURL
 	return client
 }

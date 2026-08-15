@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"sync"
 	"testing"
 
-	"github.com/google/go-github/v84/github"
+	"github.com/google/go-github/v90/github"
 )
 
 const testBaseURLPath = "/api-v3"
@@ -47,12 +46,11 @@ func newTestScanner(t *testing.T, authenticated bool) (*Scanner, *http.ServeMux)
 	server := httptest.NewServer(apiHandler)
 	t.Cleanup(server.Close)
 
-	client := github.NewClient(nil)
-	baseURL, err := url.Parse(server.URL + testBaseURLPath + "/")
+	base := server.URL + testBaseURLPath + "/"
+	client, err := github.NewClient(github.WithURLs(&base, nil))
 	if err != nil {
-		t.Fatalf("failed to parse test URL: %v", err)
+		t.Fatalf("failed to build test client: %v", err)
 	}
-	client.BaseURL = baseURL
 
 	return &Scanner{
 		client:        client,

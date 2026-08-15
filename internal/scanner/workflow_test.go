@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/go-github/v84/github"
+	"github.com/google/go-github/v90/github"
 	"gopkg.in/yaml.v3"
 )
 
@@ -416,10 +416,10 @@ func TestEvaluateDangerousWorkflowRule_SeverityTracksPRCreationPolicy(t *testing
 		wantSeverity string
 		wantRestrict bool
 	}{
-		{"public, policy all", &ScanFacts{Repository: &github.Repository{Private: github.Ptr(false)}, PullRequestCreationPolicy: "all"}, SeverityCritical, false},
+		{"public, policy all", &ScanFacts{Repository: &github.Repository{Private: github.Ptr(false), PullRequestCreationPolicy: github.Ptr("all")}}, SeverityCritical, false},
 		{"public, policy unknown stays critical", &ScanFacts{Repository: &github.Repository{}}, SeverityCritical, false},
-		{"public, collaborators only", &ScanFacts{Repository: &github.Repository{Private: github.Ptr(false)}, PullRequestCreationPolicy: "collaborators_only"}, SeverityMedium, true},
-		{"private repository", &ScanFacts{Repository: &github.Repository{Private: github.Ptr(true)}, PullRequestCreationPolicy: "all"}, SeverityMedium, true},
+		{"public, collaborators only", &ScanFacts{Repository: &github.Repository{Private: github.Ptr(false), PullRequestCreationPolicy: github.Ptr("collaborators_only")}}, SeverityMedium, true},
+		{"private repository", &ScanFacts{Repository: &github.Repository{Private: github.Ptr(true), PullRequestCreationPolicy: github.Ptr("all")}}, SeverityMedium, true},
 	}
 
 	for _, tc := range cases {
