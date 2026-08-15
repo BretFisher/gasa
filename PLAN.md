@@ -1204,7 +1204,7 @@ Correction to R18 as originally written: adding Renovate to `gasa-pass` does **n
   concludes the rule evaluated and passed; the report shows the rule never happened. Whatever fix
   lands for R10's silent-emission problem should also make the debug line distinguish "passed and said
   so" from "produced nothing"
-- **R17 — efficiency, rule 8 and batch mode: nine 404 probes per scan just to look for Renovate.** A
+- ~~**R17**~~ **Done 2026-08-12** — efficiency, rule 8 and batch mode: nine 404 probes per scan just to look for Renovate. A
   full scan of `gasa-pass` issues 19 GitHub API calls, and **9 of them** are contents requests for
   Renovate config paths that do not exist (`renovate.json`, `renovate.json5`,
   `.github/renovate.json*`, `.gitlab/renovate.json*`, `.renovaterc*`). The scanner short-circuits at
@@ -1370,7 +1370,11 @@ Two further defects were found while building it, both fixed in the same pull re
   nothing. `TestMain` now refuses to run on an empty registry, and a scan reporting fewer findings
   than there are registered rules is a hard failure
 
-**Phase E — deferred.** R17 (nine Renovate 404 probes per scan) is an efficiency item that blocks nothing. The three new-rule candidates surfaced by this audit (R6, R8, R16) have moved to Phase 13.
+**Phase E.** ~~R17 (nine Renovate 404 probes per scan)~~ **Done 2026-08-12** — a file-inventory
+collector lists the root and dot-directories (one or two requests) and the update-tool collectors
+skip paths the listings proved absent, dropping the common no-Renovate case from eleven requests to
+two or three. Any listing failure or truncation falls back to per-path probing, so it can only cost
+speed, never correctness. The three new-rule candidates (R6, R8, R16) moved to Phase 13.
 
 ### Open decisions
 

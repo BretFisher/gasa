@@ -173,7 +173,7 @@ func TestCollectDependabotFacts_DebugLogsKeyDecisions(t *testing.T) {
 		lines = append(lines, repo+"|"+msg)
 	}
 
-	facts := newTestFactCollector(s).collectDependabotFacts(context.Background(), "owner", "repo", true, dbg)
+	facts := newTestFactCollector(s).collectDependabotFacts(context.Background(), "owner", "repo", true, probeEverything(), dbg)
 	if facts.Config == nil {
 		t.Fatalf("expected parsed config, got %+v", facts)
 	}
@@ -202,7 +202,7 @@ func TestCollectRenovateFacts_DebugLogsKeyDecisions(t *testing.T) {
 		lines = append(lines, repo+"|"+msg)
 	}
 
-	facts := newTestFactCollector(s).collectRenovateFacts(context.Background(), "owner", "repo", true, dbg)
+	facts := newTestFactCollector(s).collectRenovateFacts(context.Background(), "owner", "repo", true, probeEverything(), dbg)
 	if facts.Config == nil {
 		t.Fatalf("expected parsed config, got %+v", facts)
 	}
@@ -227,7 +227,7 @@ func TestCollectRenovateFacts_IndeterminateErrorMarksUnknown(t *testing.T) {
 	handle500(mux, renovateServerPaths()...)
 
 	collector := newTestFactCollector(s)
-	facts := collector.collectRenovateFacts(context.Background(), "owner", "repo", true, nil)
+	facts := collector.collectRenovateFacts(context.Background(), "owner", "repo", true, probeEverything(), nil)
 
 	if facts.Missing {
 		t.Fatalf("Missing = true; an indeterminate error must not be reported as absent")
@@ -249,7 +249,7 @@ func TestCollectRenovateFacts_OneIndeterminatePathTaintsMissing(t *testing.T) {
 	handle404(mux, renovateServerPaths()[1:]...)
 
 	collector := newTestFactCollector(s)
-	facts := collector.collectRenovateFacts(context.Background(), "owner", "repo", true, nil)
+	facts := collector.collectRenovateFacts(context.Background(), "owner", "repo", true, probeEverything(), nil)
 
 	if facts.Missing || !facts.Unknown {
 		t.Fatalf("Missing=%v Unknown=%v, want Missing=false Unknown=true", facts.Missing, facts.Unknown)
@@ -261,7 +261,7 @@ func TestCollectRenovateFacts_AllNotFoundIsMissing(t *testing.T) {
 	handle404(mux, renovateServerPaths()...)
 
 	collector := newTestFactCollector(s)
-	facts := collector.collectRenovateFacts(context.Background(), "owner", "repo", true, nil)
+	facts := collector.collectRenovateFacts(context.Background(), "owner", "repo", true, probeEverything(), nil)
 
 	if !facts.Missing || facts.Unknown {
 		t.Fatalf("Missing=%v Unknown=%v, want Missing=true Unknown=false", facts.Missing, facts.Unknown)
@@ -279,7 +279,7 @@ func TestCollectDependabotFacts_IndeterminateErrorMarksUnknown(t *testing.T) {
 	)
 
 	collector := newTestFactCollector(s)
-	facts := collector.collectDependabotFacts(context.Background(), "owner", "repo", true, nil)
+	facts := collector.collectDependabotFacts(context.Background(), "owner", "repo", true, probeEverything(), nil)
 
 	if facts.Missing || !facts.Unknown {
 		t.Fatalf("Missing=%v Unknown=%v, want Missing=false Unknown=true", facts.Missing, facts.Unknown)
@@ -701,8 +701,8 @@ func collectAndEvaluateUpdateToolConfiguration(t *testing.T, s *Scanner) []Findi
 	hasWorkflows := len(workflows) > 0
 	facts := &ScanFacts{
 		Workflows:  workflows,
-		Dependabot: collector.collectDependabotFacts(context.Background(), "owner", "repo", hasWorkflows, nil),
-		Renovate:   collector.collectRenovateFacts(context.Background(), "owner", "repo", hasWorkflows, nil),
+		Dependabot: collector.collectDependabotFacts(context.Background(), "owner", "repo", hasWorkflows, probeEverything(), nil),
+		Renovate:   collector.collectRenovateFacts(context.Background(), "owner", "repo", hasWorkflows, probeEverything(), nil),
 	}
 	return evaluateUpdateToolConfigurationFacts(facts)
 }

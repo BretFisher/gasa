@@ -93,7 +93,7 @@ func parseRenovateConfig(content string) (*RenovateConfig, error) {
 // Fact collectors
 // ---------------------------------------------------------------------------
 
-func (c *factCollector) collectDependabotFacts(ctx context.Context, owner, repo string, hasWorkflows bool, dbg DebugLogger) DependabotFacts {
+func (c *factCollector) collectDependabotFacts(ctx context.Context, owner, repo string, hasWorkflows bool, inv fileInventory, dbg DebugLogger) DependabotFacts {
 	repoFull := owner + "/" + repo
 	facts := DependabotFacts{
 		Path:         defaultDependabotPath,
@@ -104,8 +104,14 @@ func (c *factCollector) collectDependabotFacts(ctx context.Context, owner, repo 
 	// means the config is genuinely absent; an indeterminate error (timeout,
 	// rate limit, 5xx) means we could not determine presence, which is recorded
 	// as Unknown + a scan warning rather than silently reported as Missing.
+	//
+	// When the file inventory is complete, paths it never saw are skipped
+	// without a request — the listing already proved them absent.
 	var indeterminateErr error
 	for _, path := range []string{defaultDependabotPath, ".github/dependabot.yaml"} {
+		if inv.Complete && !inv.Has(path) {
+			continue
+		}
 		if dbg != nil {
 			dbg(repoFull, "GET /repos/"+repoFull+"/contents/"+path)
 		}
@@ -169,14 +175,40 @@ func parseDependabotContent(facts *DependabotFacts, fileContent *github.Reposito
 	}
 }
 
-func (c *factCollector) collectRenovateFacts(ctx context.Context, owner, repo string, hasWorkflows bool, dbg DebugLogger) RenovateFacts {
+// parseRenovateContent parses a fetched Renovate config into the facts,
+// recording a parse failure as Invalid rather than dropping it.
+func parseRenovateContent(facts *RenovateFacts, path, content string, dbg DebugLogger, repoFull string) {
+	config, err := parseRenovateConfig(content)
+	if err != nil {
+		facts.Invalid = fmt.Errorf("parse %s: %w", path, err)
+		if dbg != nil {
+			dbg(repoFull, "renovate config parse error: "+facts.Invalid.Error())
+		}
+		return
+	}
+	facts.Config = config
+	if dbg != nil {
+		dbg(repoFull, fmt.Sprintf("renovate config parsed: covers-actions=%v pin-digests=%v cooldown=%v extends=%v",
+			renovateCoversActions(config), renovatePinningConfigured(config), renovateCooldownConfigured(config), config.Extends))
+	}
+}
+
+func (c *factCollector) collectRenovateFacts(ctx context.Context, owner, repo string, hasWorkflows bool, inv fileInventory, dbg DebugLogger) RenovateFacts {
 	repoFull := owner + "/" + repo
 	facts := RenovateFacts{
 		HasWorkflows: hasWorkflows,
 	}
 
+	// The candidate paths are probed in Renovate's own precedence order, so the
+	// first hit wins exactly as Renovate itself would resolve it. A complete
+	// file inventory lets known-absent paths be skipped without a request —
+	// which is most of them, most of the time: a repository without Renovate
+	// used to pay all nine 404s on every scan.
 	var indeterminateErr error
 	for _, path := range renovateConfigPaths {
+		if inv.Complete && !inv.Has(path) {
+			continue
+		}
 		if dbg != nil {
 			dbg(repoFull, "GET /repos/"+repoFull+"/contents/"+path)
 		}
@@ -207,23 +239,7 @@ func (c *factCollector) collectRenovateFacts(ctx context.Context, owner, repo st
 		if dbg != nil {
 			dbg(repoFull, "found renovate config at "+path)
 		}
-
-		config, err := parseRenovateConfig(content)
-		if err != nil {
-			facts.Invalid = fmt.Errorf("parse %s: %w", path, err)
-			if dbg != nil {
-				dbg(repoFull, "renovate config parse error: "+facts.Invalid.Error())
-			}
-		} else {
-			facts.Config = config
-			coversActions := renovateCoversActions(config)
-			pinned := renovatePinningConfigured(config)
-			hasCooldown := renovateCooldownConfigured(config)
-			if dbg != nil {
-				dbg(repoFull, fmt.Sprintf("renovate config parsed: covers-actions=%v pin-digests=%v cooldown=%v extends=%v",
-					coversActions, pinned, hasCooldown, config.Extends))
-			}
-		}
+		parseRenovateContent(&facts, path, content, dbg, repoFull)
 		return facts
 	}
 
