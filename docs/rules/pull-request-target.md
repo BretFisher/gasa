@@ -18,6 +18,20 @@ messages:
       Use the `pull_request` event instead. If you cannot avoid
       `pull_request_target`, keep the workflow limited to trusted base-branch
       code only and never check out or execute untrusted pull request code.
+  used-restricted:
+    title: pull_request_target event is used (external PRs are restricted)
+    description: >-
+      This workflow uses `pull_request_target`, which runs in the context of the
+      base branch with access to a more trusted token and potentially secrets.
+      External contributors cannot currently open pull requests against this
+      repository (it is private, or its pull request creation policy is limited
+      to collaborators), so there is no untrusted pull request for the workflow
+      to act on today — but that mitigation is a repository setting, one click
+      away from disappearing, which is why this is medium rather than resolved.
+    fix: >-
+      Use the `pull_request` event instead. If you cannot avoid
+      `pull_request_target`, keep the workflow limited to trusted base-branch
+      code only and never check out or execute untrusted pull request code.
   pass:
     title: pull_request_target event is not used
     description: >-
@@ -52,6 +66,18 @@ The scanner:
   - a mapping with a `pull_request_target` key
 
 This rule does not try to prove whether the workflow later checks out untrusted code. It flags any use of `pull_request_target` because that event should never be used in a public repository and is highly discouraged in a private repository.
+
+### Severity
+
+The finding is **critical** by default. It drops to **medium** — never lower — when external
+contributors cannot open pull requests against the repository at all: the repository is private, or
+its `pull_request_creation_policy` is `collaborators_only`. In that state there is no untrusted
+pull request for the workflow to act on, but the protection is a repository setting rather than a
+property of the workflow, so the dangerous pattern still warrants a finding. Only that one
+known-restricted policy value downgrades; an unknown or absent value keeps the critical reading,
+so a new GitHub policy value can only over-report, never under-report. The policy is read from the
+same `GET /repos/{owner}/{repo}` response the scan always made, so this costs no additional API
+call.
 
 ## Why this matters
 

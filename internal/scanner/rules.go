@@ -598,16 +598,45 @@ func actionsObservedDisabled(facts *ScanFacts) bool {
 	return permissions != nil && permissions.Enabled != nil && !*permissions.Enabled
 }
 
+// prCreationPolicyCollaboratorsOnly is the one pull_request_creation_policy
+// value known to prevent external contributors from opening pull requests at
+// all. Only this known-restricted value downgrades the finding; an unknown or
+// absent value keeps the severe reading, so a new GitHub enum value can only
+// over-report, never under-report.
+const prCreationPolicyCollaboratorsOnly = "collaborators_only"
+
+// externalPRCreationRestricted reports whether external contributors are unable
+// to open pull requests against this repository — private repositories take
+// only collaborator PRs by nature, and the creation policy can restrict public
+// ones the same way. When true there is no untrusted pull request for a
+// pull_request_target workflow to act on today.
+func externalPRCreationRestricted(facts *ScanFacts) bool {
+	if facts.Repository.GetPrivate() {
+		return true
+	}
+	return facts.PullRequestCreationPolicy == prCreationPolicyCollaboratorsOnly
+}
+
 func evaluateDangerousWorkflowRule(facts *ScanFacts) []Finding {
+	// The trigger is the same, but the blast radius is not: where external
+	// contributors cannot open PRs at all, there is no untrusted head for the
+	// workflow to check out today. Medium instead of critical — the mitigation
+	// is a repository setting, one click away from disappearing, so it never
+	// downgrades further than that.
+	severity, msgKey := SeverityCritical, "used"
+	if externalPRCreationRestricted(facts) {
+		severity, msgKey = SeverityMedium, "used-restricted"
+	}
+
 	var findings []Finding
 	for _, wf := range facts.Workflows {
 		if !wf.Valid || !hasDangerousTrigger(wf.Workflow.On) {
 			continue
 		}
-		msg := ruleMessage(ruleNamePullRequestTarget, "used", nil)
+		msg := ruleMessage(ruleNamePullRequestTarget, msgKey, nil)
 		findings = append(findings, Finding{
 			ID:          fmt.Sprintf("dangerous-trigger-%s", wf.Path),
-			Severity:    SeverityCritical,
+			Severity:    severity,
 			Title:       msg.Title,
 			Description: msg.Description,
 			File:        wf.Path,

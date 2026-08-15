@@ -17,9 +17,14 @@ func (c *factCollector) addWarning(area, detail string) {
 }
 
 type ScanFacts struct {
-	Repository                              *github.Repository
-	RepositoryOwner                         string
-	DefaultBranch                           string
+	Repository      *github.Repository
+	RepositoryOwner string
+	DefaultBranch   string
+	// PullRequestCreationPolicy is the repository setting controlling who may
+	// open pull requests ("all", "collaborators_only", …). Carried separately
+	// from Repository because go-github does not model the field. Empty when
+	// GitHub did not report it.
+	PullRequestCreationPolicy               string
 	Workflows                               []WorkflowFact
 	ActionsSettings                         ActionsSettingsFacts
 	Dependabot                              DependabotFacts
@@ -128,10 +133,11 @@ type factCollector struct {
 	warnings []FactWarning
 }
 
-func (c *factCollector) collectFacts(ctx context.Context, owner, repo string, repository *github.Repository, cfg *Config, dbg DebugLogger) *ScanFacts {
+func (c *factCollector) collectFacts(ctx context.Context, owner, repo string, repository *github.Repository, prCreationPolicy string, cfg *Config, dbg DebugLogger) *ScanFacts {
 	facts := &ScanFacts{
 		Repository:                              repository,
 		RepositoryOwner:                         owner,
+		PullRequestCreationPolicy:               prCreationPolicy,
 		DefaultBranch:                           "HEAD",
 		ActionVersionPinningIgnoreSameOwner:     cfg.actionVersionPinningIgnoreSameOwner(),
 		UpdateToolConfigurationRequireWorkflows: cfg.updateToolConfigurationRequireWorkflows(),
