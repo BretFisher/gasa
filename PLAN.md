@@ -1309,7 +1309,11 @@ Phase C cannot begin until this stack is merged: PRs #34 and #39 change rule out
     short-circuits on gasa-pass's Dependabot `github-actions` entry before preset resolution runs.
     The preset table's must-NOT-pass direction (`config:recommended`) is what `gasa-fail-private`
     covers live; the must-pass direction rests on unit tests
-11. Hygiene: make fixture workflow `run:` steps inert (`gasa-fail` only; the new fixture already is)
+11. ~~Hygiene: make fixture workflow `run:` steps inert~~ **Done 2026-08-12.** Both `gasa-fail`
+    workflows now only echo, and the github-script step logs instead of posting a PR comment — which
+    it genuinely would have done, since the repository's default token permission is deliberately
+    `write`. Every rule-relevant byte (triggers, `uses:` refs, absence of `permissions:`) is
+    unchanged, so finding IDs and goldens are untouched
 
 Decided 2026-08-11: **Dependabot is not suppressed on the fixture repositories.** Churn is accepted and `fixtures-apply` reverts it, which needs no extra setup and self-heals. This closes R2 and R14.
 

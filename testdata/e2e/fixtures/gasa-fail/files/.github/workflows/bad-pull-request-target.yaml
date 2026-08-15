@@ -2,6 +2,11 @@
 # The example is mostly safe because I've locked down PRs to only ppl with write access and
 #   set Actions to require manual approval for all external contributions
 # GitHub as also hardened things like pull_request_target and actions/checkout in 2026
+#
+# Step bodies are deliberately inert: this file demonstrates the dangerous
+# SHAPE (pull_request_target + untrusted checkout + secrets in scope) for the
+# gasa test suite. A trigger firing costs nothing and does nothing. Do not add
+# real commands here.
 
 name: PR Build & Comment
 
@@ -20,9 +25,10 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
-      # ⚠️ ...then executes it, while secrets are in scope
+      # ⚠️ ...where a real workflow would then execute it while secrets are in
+      # scope. This fixture only echoes.
       - name: Install & build
-        run: npm ci && npm run build
+        run: echo "inert fixture step — no commands are executed in this repository"
 
       - name: Comment result
         uses: actions/github-script@v7
@@ -30,9 +36,7 @@ jobs:
           DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
         with:
           script: |
-            github.rest.issues.createComment({
-              issue_number: context.payload.pull_request.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: 'Build complete ✅'
-            })
+            // Inert on purpose: the repository default token permission is
+            // deliberately `write` (a gasa fixture state), so a real API call
+            // here would actually succeed. Log and do nothing.
+            console.log("inert fixture — no operations performed")
