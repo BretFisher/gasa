@@ -1,0 +1,21 @@
+# Deliberately grants `write-all` — the broadest possible GITHUB_TOKEN grant —
+# so the gasa write-all-permissions rule has a real failing case. Everything
+# else about this file is deliberately clean: permissions are explicit (so the
+# workflow-permissions rule passes), there are no `uses:` references (so the
+# pinning rule sees nothing), and the trigger is plain push. The step body is
+# inert, which matters: a run of this workflow genuinely holds a write-all
+# token.
+name: Bad Write All
+
+on:
+  push:
+    branches: [main]
+
+permissions: write-all
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inert fixture step
+        run: echo "inert fixture step — no commands are executed in this repository"

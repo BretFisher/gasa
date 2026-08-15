@@ -1408,12 +1408,14 @@ Why these are grouped and deferred:
 
 Candidates, in rough order of value:
 
-1. **Over-broad explicit workflow permissions (from R6).** `workflows/workflow-permissions` is
-   presence-only by design, so `permissions: write-all` — the broadest possible grant — produces a
-   clean pass at severity high. Either extend that rule to flag blanket grants, or add a separate rule.
-   Needs a decision on which scopes count as over-broad beyond `write-all`, since `contents: write` is
-   legitimate in plenty of workflows. `gasa-pass` already contains a milder instance:
-   `pr-target-replace-2.yaml` passes with `pull-requests: write`
+1. ~~**Over-broad explicit workflow permissions (from R6).**~~ **Done 2026-08-12** as a separate
+   rule, `workflows/write-all-permissions` (high). Separate rather than an extension because
+   `workflow-permissions` is a presence check by documented design, and "explicit but too broad" is
+   a coherent state the two rules should express independently. v1 flags only the literal
+   `write-all` (workflow or job level) — the one grant with no false-positive boundary to argue
+   about. Scoped writes like `pull-requests: write` stay legal; widening to combinations of scopes
+   would need the boundary decision this deliberately avoids. Fail fixture: `bad-write-all.yaml`
+   on `gasa-fail`, built so no other rule fires on it
 
 2. **`sha_pinning_required` repository setting (from R8).** Present in the `GET
    /repos/{owner}/{repo}/actions/permissions` response that `allowed-actions-policy` already parses. It

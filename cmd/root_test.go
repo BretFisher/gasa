@@ -191,7 +191,7 @@ func TestPrintRulesTable(t *testing.T) {
 		printRulesTable()
 	})
 	checks := []string{
-		"Available rules: 10",
+		"Available rules: 11",
 		"workflows/pull-request-target",
 		"actions/permissions/allowed-actions-policy",
 		"updates/update-tool-configuration",
@@ -214,8 +214,8 @@ func TestPrintRulesJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(output), &rules); err != nil {
 		t.Fatalf("json.Unmarshal() error: %v\noutput=%s", err, output)
 	}
-	if len(rules) != 10 {
-		t.Fatalf("len(rules) = %d, want 10", len(rules))
+	if len(rules) != 11 {
+		t.Fatalf("len(rules) = %d, want 11", len(rules))
 	}
 	if rules[0].Name == "" {
 		t.Fatal("expected populated rule names")

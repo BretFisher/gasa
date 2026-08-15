@@ -334,3 +334,64 @@ func TestSanitizeID(t *testing.T) {
 		t.Fatalf("sanitizeID() = %s, want %s", got, want)
 	}
 }
+
+// write-all is the broadest possible grant, and it PASSES workflow-permissions
+// by design (that rule checks presence, not breadth). This rule closes the gap.
+func TestEvaluateWriteAllPermissionsRule(t *testing.T) {
+	parse := func(t *testing.T, content string) []WorkflowFact {
+		t.Helper()
+		workflow := &WorkflowFile{}
+		if err := yaml.Unmarshal([]byte(content), workflow); err != nil {
+			t.Fatalf("yaml.Unmarshal() error: %v", err)
+		}
+		return []WorkflowFact{{Path: ".github/workflows/ci.yml", Content: content, Workflow: workflow, Valid: true}}
+	}
+
+	t.Run("workflow level", func(t *testing.T) {
+		facts := &ScanFacts{Workflows: parse(t, "on: push\npermissions: write-all\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n")}
+		findings := evaluateWriteAllPermissionsRule(facts)
+		if len(findings) != 1 || findings[0].ID != "write-all-.github/workflows/ci.yml" {
+			t.Fatalf("findings = %+v, want one workflow-level finding", findings)
+		}
+		if findings[0].Severity != SeverityHigh {
+			t.Fatalf("severity = %q, want high", findings[0].Severity)
+		}
+		// The same workflow must PASS the presence check: explicit-but-broad is
+		// exactly the split the two rules exist to express.
+		if presence := evaluateWorkflowPermissionsRule(facts); len(presence) != 0 {
+			t.Fatalf("workflow-permissions findings = %+v, want none for explicit permissions", presence)
+		}
+	})
+
+	t.Run("job level, deterministic order", func(t *testing.T) {
+		content := "on: push\npermissions: {}\njobs:\n  zeta:\n    permissions: write-all\n    runs-on: ubuntu-latest\n    steps: [{run: echo hi}]\n  alpha:\n    permissions: write-all\n    runs-on: ubuntu-latest\n    steps: [{run: echo hi}]\n"
+		findings := evaluateWriteAllPermissionsRule(&ScanFacts{Workflows: parse(t, content)})
+		if len(findings) != 2 {
+			t.Fatalf("findings = %+v, want two job-level findings", findings)
+		}
+		if findings[0].ID != "write-all-.github/workflows/ci.yml-alpha" || findings[1].ID != "write-all-.github/workflows/ci.yml-zeta" {
+			t.Fatalf("job findings must be name-sorted for deterministic output, got %q then %q", findings[0].ID, findings[1].ID)
+		}
+	})
+
+	t.Run("read-all and scoped writes are not flagged", func(t *testing.T) {
+		for _, content := range []string{
+			"on: push\npermissions: read-all\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps: [{run: echo hi}]\n",
+			"on: push\npermissions:\n  contents: write\n  issues: write\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps: [{run: echo hi}]\n",
+		} {
+			if findings := evaluateWriteAllPermissionsRule(&ScanFacts{Workflows: parse(t, content)}); len(findings) != 0 {
+				t.Fatalf("findings = %+v, want none for:\n%s", findings, content)
+			}
+		}
+	})
+
+	t.Run("jobless and unparsed files are skipped", func(t *testing.T) {
+		facts := &ScanFacts{Workflows: []WorkflowFact{
+			{Path: "a.yml", Valid: false, Content: "permissions: write-all"},
+			{Path: "b.yml", Valid: true, Workflow: &WorkflowFile{Permissions: "write-all"}},
+		}}
+		if findings := evaluateWriteAllPermissionsRule(facts); len(findings) != 0 {
+			t.Fatalf("findings = %+v, want none", findings)
+		}
+	})
+}
