@@ -38,11 +38,34 @@ overrides:
 	if cfg == nil {
 		t.Fatalf("cfg = nil")
 	}
-	if !cfg.actionVersionPinningIgnoreSameOwner() {
-		t.Fatal("expected ignore_same_owner to be enabled")
+	// The legacy ignore_same_owner switch must enable both per-kind options.
+	if !cfg.actionVersionPinningIgnoreSameOwnerActions() || !cfg.actionVersionPinningIgnoreSameOwnerReusableWorkflows() {
+		t.Fatal("expected legacy ignore_same_owner to enable both per-kind ignores")
 	}
 	if !cfg.updateToolConfigurationRequireWorkflows() {
 		t.Fatal("expected require_workflows to be enabled")
+	}
+}
+
+// The two per-kind ignore switches parse independently and do not imply each
+// other.
+func TestActionVersionPinningIgnoreOptions_PerKind(t *testing.T) {
+	var cfg Config
+	cfg.RuleOptions.ActionVersionPinning.IgnoreSameOwnerActions = true
+	if !cfg.actionVersionPinningIgnoreSameOwnerActions() {
+		t.Fatal("ignore_same_owner_actions must enable the actions ignore")
+	}
+	if cfg.actionVersionPinningIgnoreSameOwnerReusableWorkflows() {
+		t.Fatal("ignore_same_owner_actions must not imply the reusable-workflows ignore")
+	}
+
+	var cfg2 Config
+	cfg2.RuleOptions.ActionVersionPinning.IgnoreSameOwnerReusableWorkflows = true
+	if !cfg2.actionVersionPinningIgnoreSameOwnerReusableWorkflows() {
+		t.Fatal("ignore_same_owner_reusable_workflows must enable the reusable-workflows ignore")
+	}
+	if cfg2.actionVersionPinningIgnoreSameOwnerActions() {
+		t.Fatal("ignore_same_owner_reusable_workflows must not imply the actions ignore")
 	}
 }
 

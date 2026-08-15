@@ -708,45 +708,77 @@ func evaluateActionVersionPinningRule(facts *ScanFacts) []Finding {
 			actions = findUnpinnedActionsInWorkflow(wf.Workflow, wf.Content)
 		}
 		for _, action := range actions {
-			if shouldIgnoreActionVersionPinning(action.name, facts) {
+			finding, ok := actionVersionPinningFinding(wf.Path, action, facts)
+			if !ok {
 				continue
 			}
-			msg := ruleMessage(ruleNameActionVersionPinning, "unpinned", map[string]string{
-				"Action": shortActionName(action.name),
-				"Ref":    action.version,
-			})
-			findings = append(findings, Finding{
-				// The ref is part of the ID because one file can reference the
-				// same action at two different mutable refs — actions/checkout@v4
-				// in one job and @v3 in another. Keying on path+name alone made
-				// those two findings share an ID, and dedupeFindings silently
-				// dropped the second: a real unpinned action disappearing from
-				// the report because a sibling finding got there first.
-				ID:          fmt.Sprintf("unpinned-%s-%s-%s", wf.Path, sanitizeID(action.name), sanitizeID(action.version)),
-				Severity:    SeverityHigh,
-				Title:       msg.Title,
-				Description: msg.Description,
-				File:        wf.Path,
-				Line:        action.line,
-				Remediation: msg.Fix,
-			})
+			findings = append(findings, finding)
 		}
 	}
 	return findings
 }
 
-func shouldIgnoreActionVersionPinning(actionName string, facts *ScanFacts) bool {
-	if facts == nil || !facts.ActionVersionPinningIgnoreSameOwner {
-		return false
+// actionVersionPinningFinding grades one unpinned reference, or reports ok=false
+// when configuration says to ignore it. Third-party refs stay high: a moved tag
+// runs someone else's code with the workflow's credentials. Refs owned by the
+// same user/org as the scanned repository are a smaller risk — the owner
+// controls both sides — but not zero, because a compromise of any one repo
+// under the owner pivots to every caller on the next mutable-ref move. So
+// same-owner refs grade low when pinned to a version tag (moves only when the
+// owner publishes) and medium when pinned to a branch (moves on every push),
+// with a per-kind config switch to ignore them entirely.
+func actionVersionPinningFinding(path string, action ActionRef, facts *ScanFacts) (Finding, bool) {
+	severity, msgKey := SeverityHigh, "unpinned"
+	if sameOwnerRef(action.name, facts.RepositoryOwner) {
+		if action.reusable && facts.ActionVersionPinningIgnoreSameOwnerReusableWorkflows {
+			return Finding{}, false
+		}
+		if !action.reusable && facts.ActionVersionPinningIgnoreSameOwnerActions {
+			return Finding{}, false
+		}
+		if isVersionTagRef(action.version) {
+			severity, msgKey = SeverityLow, "unpinned-same-owner-version"
+		} else {
+			severity, msgKey = SeverityMedium, "unpinned-same-owner-branch"
+		}
 	}
-	if strings.HasPrefix(actionName, "./") {
-		return true
+	msg := ruleMessage(ruleNameActionVersionPinning, msgKey, map[string]string{
+		"Action": shortActionName(action.name),
+		"Ref":    action.version,
+		"Kind":   actionRefKind(action.reusable),
+	})
+	return Finding{
+		// The ref is part of the ID because one file can reference the
+		// same action at two different mutable refs — actions/checkout@v4
+		// in one job and @v3 in another. Keying on path+name alone made
+		// those two findings share an ID, and dedupeFindings silently
+		// dropped the second: a real unpinned action disappearing from
+		// the report because a sibling finding got there first.
+		ID:          fmt.Sprintf("unpinned-%s-%s-%s", path, sanitizeID(action.name), sanitizeID(action.version)),
+		Severity:    severity,
+		Title:       msg.Title,
+		Description: msg.Description,
+		File:        path,
+		Line:        action.line,
+		Remediation: msg.Fix,
+	}, true
+}
+
+// sameOwnerRef reports whether the reference is owned by the same user or org
+// as the repository being scanned. Local (./) and docker:// refs never get
+// here — both extraction paths skip them.
+func sameOwnerRef(actionName, repoOwner string) bool {
+	owner, ok := actionRefOwner(actionName)
+	return ok && strings.EqualFold(owner, repoOwner)
+}
+
+// actionRefKind is the human word for what a reference points at, for finding
+// copy.
+func actionRefKind(reusable bool) string {
+	if reusable {
+		return "reusable workflow"
 	}
-	actionOwner, ok := actionRefOwner(actionName)
-	if !ok {
-		return false
-	}
-	return strings.EqualFold(actionOwner, facts.RepositoryOwner)
+	return "action"
 }
 
 func actionRefOwner(actionName string) (string, bool) {

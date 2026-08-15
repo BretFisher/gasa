@@ -28,7 +28,17 @@ type ConfigRuleOptions struct {
 }
 
 type ActionVersionPinningRuleOptions struct {
+	// IgnoreSameOwner ignores every same-owner mutable ref — actions and
+	// reusable workflows alike. Legacy switch kept as shorthand for enabling
+	// both narrower options below at once.
 	IgnoreSameOwner bool `yaml:"ignore_same_owner"`
+	// IgnoreSameOwnerActions ignores mutable refs to actions whose owner
+	// matches the repository owner being scanned.
+	IgnoreSameOwnerActions bool `yaml:"ignore_same_owner_actions"`
+	// IgnoreSameOwnerReusableWorkflows ignores mutable refs to reusable
+	// workflow calls (jobs.<id>.uses) whose owner matches the repository
+	// owner being scanned.
+	IgnoreSameOwnerReusableWorkflows bool `yaml:"ignore_same_owner_reusable_workflows"`
 }
 
 type UpdateToolConfigurationRuleOptions struct {
@@ -120,11 +130,20 @@ func (c *Config) suppressesFinding(f Finding) bool {
 	return false
 }
 
-func (c *Config) actionVersionPinningIgnoreSameOwner() bool {
+func (c *Config) actionVersionPinningIgnoreSameOwnerActions() bool {
 	if c == nil {
 		return false
 	}
-	return c.RuleOptions.ActionVersionPinning.IgnoreSameOwner
+	opts := c.RuleOptions.ActionVersionPinning
+	return opts.IgnoreSameOwner || opts.IgnoreSameOwnerActions
+}
+
+func (c *Config) actionVersionPinningIgnoreSameOwnerReusableWorkflows() bool {
+	if c == nil {
+		return false
+	}
+	opts := c.RuleOptions.ActionVersionPinning
+	return opts.IgnoreSameOwner || opts.IgnoreSameOwnerReusableWorkflows
 }
 
 func (c *Config) updateToolConfigurationRequireWorkflows() bool {

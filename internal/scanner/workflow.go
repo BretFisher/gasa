@@ -206,11 +206,13 @@ func hasDangerousTrigger(on interface{}) bool {
 	return false
 }
 
-// ActionRef holds information about an action reference
+// ActionRef holds information about an action reference. reusable marks a
+// reusable workflow call (jobs.<id>.uses) as opposed to a step action.
 type ActionRef struct {
-	name    string
-	version string
-	line    int
+	name     string
+	version  string
+	line     int
+	reusable bool
 }
 
 // checkoutSafeMajor is the first actions/checkout major release that refuses
@@ -273,6 +275,7 @@ func findUnpinnedActionsInWorkflow(workflow *WorkflowFile, content string) []Act
 		job := workflow.Jobs[name]
 		if action, ok := parseActionRef(job.Uses); ok && !isSHA(action.version) {
 			action.line = findUsesLine(content, job.Uses)
+			action.reusable = true
 			unpinned = append(unpinned, action)
 		}
 		for _, step := range job.Steps {
@@ -344,12 +347,24 @@ func findUnpinnedActions(content string) []ActionRef {
 					name:    actionName,
 					version: version,
 					line:    lineNum + 1,
+					// The regex fallback has no job/step structure to lean
+					// on, but a reusable workflow ref always embeds its
+					// workflow path.
+					reusable: strings.Contains(actionName, "/.github/workflows/"),
 				})
 			}
 		}
 	}
 
 	return unpinned
+}
+
+// isVersionTagRef reports whether a mutable ref looks like a version tag (v4,
+// 4, v4.1.1, v2-beta) rather than a branch. Used to grade same-owner refs: a
+// version tag moves only when the owner publishes a release, while a branch
+// moves on every push.
+func isVersionTagRef(ref string) bool {
+	return versionTagMajorRegex.MatchString(ref)
 }
 
 // isSHA checks if a string is a full SHA-1 or SHA-256 object ID.

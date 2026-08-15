@@ -94,8 +94,9 @@ func TestEvaluateActionVersionPinningRuleFallsBackToRegexForInvalidYAML(t *testi
 
 func TestEvaluateActionVersionPinningRule_IgnoreSameOwner(t *testing.T) {
 	facts := &ScanFacts{
-		RepositoryOwner:                     "BretFisher",
-		ActionVersionPinningIgnoreSameOwner: true,
+		RepositoryOwner: "BretFisher",
+		ActionVersionPinningIgnoreSameOwnerActions:           true,
+		ActionVersionPinningIgnoreSameOwnerReusableWorkflows: true,
 		Workflows: []WorkflowFact{{
 			Path:    ".github/workflows/ci.yml",
 			Content: "steps:\n  - uses: BretFisher/internal-action@v1\n  - uses: actions/checkout@v4\n",
@@ -111,21 +112,77 @@ func TestEvaluateActionVersionPinningRule_IgnoreSameOwner(t *testing.T) {
 	}
 }
 
-func TestEvaluateActionVersionPinningRule_SameOwnerStillFlaggedByDefault(t *testing.T) {
-	facts := &ScanFacts{
-		RepositoryOwner: "bretfisher",
-		Workflows: []WorkflowFact{{
-			Path:    ".github/workflows/ci.yml",
-			Content: "steps:\n  - uses: bretfisher/internal-action@v1\n",
-		}},
+// The two ignore switches are per kind: silencing same-owner actions must not
+// silence same-owner reusable workflow calls, and vice versa.
+func TestEvaluateActionVersionPinningRule_IgnoreSameOwnerIsPerKind(t *testing.T) {
+	content := "on: push\njobs:\n  call:\n    uses: bretfisher/shared/.github/workflows/build.yml@main\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: bretfisher/internal-action@v1\n"
+	workflow := &WorkflowFile{}
+	if err := yaml.Unmarshal([]byte(content), workflow); err != nil {
+		t.Fatalf("yaml.Unmarshal() error: %v", err)
 	}
+	workflows := []WorkflowFact{{Path: ".github/workflows/ci.yml", Content: content, Workflow: workflow, Valid: true}}
 
-	findings := evaluateActionVersionPinningRule(facts)
-	if len(findings) != 1 {
-		t.Fatalf("findings len = %d, want 1\nfindings=%+v", len(findings), findings)
+	t.Run("ignore actions keeps the reusable workflow finding", func(t *testing.T) {
+		facts := &ScanFacts{
+			RepositoryOwner: "bretfisher",
+			ActionVersionPinningIgnoreSameOwnerActions: true,
+			Workflows: workflows,
+		}
+		findings := evaluateActionVersionPinningRule(facts)
+		if len(findings) != 1 || !strings.Contains(findings[0].Title, "bretfisher/shared") {
+			t.Fatalf("findings = %+v, want only the reusable workflow", findings)
+		}
+		if !strings.Contains(findings[0].Title, "reusable workflow") {
+			t.Fatalf("title = %q, want it to name the reusable workflow kind", findings[0].Title)
+		}
+	})
+
+	t.Run("ignore reusable workflows keeps the action finding", func(t *testing.T) {
+		facts := &ScanFacts{
+			RepositoryOwner: "bretfisher",
+			ActionVersionPinningIgnoreSameOwnerReusableWorkflows: true,
+			Workflows: workflows,
+		}
+		findings := evaluateActionVersionPinningRule(facts)
+		if len(findings) != 1 || !strings.Contains(findings[0].Title, "bretfisher/internal-action") {
+			t.Fatalf("findings = %+v, want only the action", findings)
+		}
+	})
+}
+
+// Same-owner refs still flag by default, but graded by how the ref can move:
+// low for a version tag (moves only on publish), medium for a branch (moves on
+// every push). Third-party refs stay high regardless of ref shape.
+func TestEvaluateActionVersionPinningRule_SameOwnerSeverityTiers(t *testing.T) {
+	cases := []struct {
+		name         string
+		uses         string
+		wantSeverity string
+	}{
+		{"same-owner action on version tag", "bretfisher/internal-action@v1", SeverityLow},
+		{"same-owner action on dotted version tag", "bretfisher/internal-action@v1.2.3", SeverityLow},
+		{"same-owner action on branch", "bretfisher/internal-action@main", SeverityMedium},
+		{"same-owner reusable-workflow-style ref on branch", "bretfisher/shared/.github/workflows/build.yml@main", SeverityMedium},
+		{"third-party action on version tag", "actions/checkout@v4", SeverityHigh},
+		{"third-party action on branch", "docker/login-action@master", SeverityHigh},
 	}
-	if !strings.Contains(findings[0].Title, "bretfisher/internal-action") {
-		t.Fatalf("unexpected finding: %+v", findings[0])
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			facts := &ScanFacts{
+				RepositoryOwner: "bretfisher",
+				Workflows: []WorkflowFact{{
+					Path:    ".github/workflows/ci.yml",
+					Content: "steps:\n  - uses: " + tc.uses + "\n",
+				}},
+			}
+			findings := evaluateActionVersionPinningRule(facts)
+			if len(findings) != 1 {
+				t.Fatalf("findings = %+v, want one", findings)
+			}
+			if findings[0].Severity != tc.wantSeverity {
+				t.Fatalf("severity = %q, want %q", findings[0].Severity, tc.wantSeverity)
+			}
+		})
 	}
 }
 

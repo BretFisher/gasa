@@ -1452,6 +1452,21 @@ Candidates, in rough order of value:
    usage, and a standalone rule for the other private fork-PR toggles (send write tokens / send
    secrets to fork PR workflows)
 
+4. ~~**Same-owner pinning tiers (from the 2026-08-12 account-scan review).**~~ **Done 2026-08-12.**
+   The 93-repo account scan (run with `--no-config`, so `.gasa.yaml`'s `ignore_same_owner` never
+   applied) surfaced that same-owner reusable workflows graded identically to third-party refs. The
+   single `ignore_same_owner` option split into two per-kind options —
+   `ignore_same_owner_actions` and `ignore_same_owner_reusable_workflows` — with the legacy key
+   kept as shorthand for both. Default grading changed: same-owner refs now flag **low** when
+   pinned to a version tag (moves only on publish) and **medium** when pinned to a branch (moves on
+   every push, so a compromise of that one repo pivots into every caller on the next commit);
+   third-party refs stay high. The rule doc now spells out the cross-repo pivot risk, the
+   mitigation pairing (version tag + immutable releases on the referenced repo), and GitHub's own
+   `sha_pinning_required` enforcement exemption — "Reusable workflows can still be referenced by
+   tag", tags only, meaning a same-owner reusable workflow pinned to `@main` stops running the
+   moment that setting is enabled. Note the exemption in GitHub's docs is *not* scoped to same
+   user/org — it covers reusable workflows referenced by tag generally
+
 Implementation requirements for any of these:
 
 - stable rule ID, front-matter metadata, a `docs/rules/` page, unit tests, and pass/fail fixture coverage in the Phase 12 repos
