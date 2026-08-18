@@ -30,7 +30,7 @@ jobs:
     steps:
       - name: Checkout
         # persist-credentials required: this job pushes the release tag via `git push origin`
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.0 # zizmor: ignore[artipacked]
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 # zizmor: ignore[artipacked]
         with:
           fetch-depth: 0
 
