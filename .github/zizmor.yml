@@ -1,0 +1,19 @@
+# zizmor configuration: https://docs.zizmor.sh/configuration/
+#
+# Keep zizmor ignores here instead of inline `# zizmor: ignore[...]` comments
+# on SHA-pinned `uses:` lines. An extra comment on those lines prevents
+# Dependabot from updating the `# vX.Y.Z` version comment (it only rewrites
+# comments that end with the version), and zizmor >= 1.29 fails to parse the
+# version comment at all when a second comment shares the line, tripping
+# ref-version-mismatch on every bump.
+rules:
+  artipacked:
+    # release.yml checkout must persist credentials: the release job pushes
+    # the release tag via `git push origin`.
+    ignore:
+      - release.yml
+  unpinned-uses:
+    # lint.yml calls our reusable super-linter workflow by @main on purpose:
+    # sha pins are controlled inside the reusable workflow, not the caller.
+    ignore:
+      - lint.yml
