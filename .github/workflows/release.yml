@@ -31,7 +31,7 @@ jobs:
       - name: Checkout
         # persist-credentials required: this job pushes the release tag via `git push origin`
         # artipacked ignore lives in .github/zizmor.yml (inline ignores break Dependabot comment updates)
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: chainguard-actions/actions-checkout@ec419da8013e66e059571719dbfa6d1483438668 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -66,17 +66,17 @@ jobs:
           fi
 
       - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e #v7.0.0
+        uses: chainguard-actions/actions-setup-go@ab5ec24e45be1a7cff2102d2b2e642b5b65813b3 # v7.0.0
         with:
           go-version-file: go.mod
           # disable build caching: this job publishes release artifacts, so a poisoned cache must not feed the build
           cache: false
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+        uses: chainguard-actions/docker-setup-buildx-action@695a7c62d4fe3f2071dbd659ecd5a8f9bc96e4dd # v4.2.0
 
       - name: Log in to GHCR
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: chainguard-actions/docker-login-action@93c9fb113ac946f14a332842652ec9600e25babc # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -95,7 +95,7 @@ jobs:
           git push origin "${VERSION}"
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 #v7.2.3
+        uses: chainguard-actions/goreleaser-goreleaser-action@2fd58e2e43dd840f1bc9e8c1e02b611632f03bc4 # v7.2.3
         with:
           distribution: goreleaser
           version: "~> v2"

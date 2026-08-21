@@ -53,12 +53,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: chainguard-actions/actions-checkout@77ae33bc0f88edf3dada8f2f8217f27a8f93df83 # v7.0.0
         with:
           persist-credentials: false
 
       - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: chainguard-actions/actions-setup-go@ab5ec24e45be1a7cff2102d2b2e642b5b65813b3 # v7.0.0
         with:
           go-version-file: go.mod
 
