@@ -9,7 +9,7 @@ require (
 	github.com/google/go-github/v90 v90.0.0
 	github.com/spf13/cobra v1.10.2
 	github.com/tailscale/hujson v0.0.0-20260302212456-ecc657c15afd
-	golang.org/x/sync v0.22.0
+	golang.org/x/sync v0.24.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
